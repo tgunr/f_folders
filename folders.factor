@@ -72,14 +72,25 @@ M: string absolute-path
     ;
 
 IN: io.directories
-:: bump-name ( path -- 'path )
-    path path-components dup
+
+: bump-name-dropTail ( path -- seq )
+    path-components dup
     length 1 - swap remove-nth 
-    path file-name
+    ;
+
+:: bump-name-adjustExtension ( path -- path )
     path file-extension dup
-    [ string>number 1 + number>string swap file-stem swap ]
-    [ drop "1" ] if
-    "." prepend append
+    [ string>number dup
+      [ 1 + number>string "." prepend
+        path file-stem swap append ]
+      [ drop path ".1" append ] if
+    ]
+    [ drop path ".1" append ] if
+    ;
+
+:: bump-name ( path -- 'path )
+    path bump-name-dropTail
+    path file-name bump-name-adjustExtension
     suffix components-to-path
     dup exists? [ bump-name ] [ ] if
     ;
