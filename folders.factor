@@ -1,9 +1,9 @@
 ! Copyright (C) 2011 PolyMicro Systems.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: accessors classes.tuple combinators io io.backend io.files
-io.files.links io.files.private io.pathnames kernel locals math
-math.parser namespaces sequences splitting strings tools.continuations
-unix.users ;
+USING: accessors classes.tuple combinators continuations io io.backend
+io.files.info io.files.links io.files.private io.files.types kernel
+locals math math.parser namespaces prettyprint sequences splitting
+strings tools.continuations unix.users ;
 
 IN: io.pathnames
 ! IN: folders
@@ -73,32 +73,27 @@ M: string absolute-path
 
 IN: io.directories
 
-: bump-name-dropTail ( path -- seq )
-    path-components dup
-    length 1 - swap remove-nth 
-    ;
+: path-without-extension ( path -- path )
+    [ [ 46 = ] find-last drop ] keep swap head ;
 
-:: bump-name-adjustExtension ( path -- path )
-    path file-extension dup
-    [ string>number dup
-      [ 1 + number>string "." prepend
-        path file-stem swap append ]
-      [ drop path ".1" append ] if
-    ]
-    [ drop path ".1" append ] if
-    ;
+: bump-name ( path -- path )
+    dup file-extension string>number [
+        [ path-without-extension "." ] dip 1 +
+        number>string 3append
+    ] [ ".1" append ] if* ;
 
-:: bump-name ( path -- 'path )
-    path bump-name-dropTail
-    path file-name bump-name-adjustExtension
-    suffix components-to-path
-    dup exists? [ bump-name ] [ ] if
-    ;
+: (move-aside-error) ( error -- )
+    "move-aside: Error: " over errno>>
+      number>string append
+      " " append over args>> first append
+      " " append swap args>> second append print
+;
 
-:: move-aside ( path -- )
-    path
-    path bump-name
-    move-file
+: move-aside ( path -- )
+    dup bump-name
+    [ move-file ]
+    [ (move-aside-error) 2drop ]
+    recover
     ;
 
 IN: folders
@@ -130,34 +125,69 @@ TUPLE: folder < directory-entry path ;
     [ replaceTilde ] [ ] if  
     ;
 
-:: to-folder ( directory-entry path -- folder )
-    directory-entry tuple-slots
-    path suffix
-    folder prefix >tuple
+! IN: string
+: (to-folder-split-path) ( x -- x x )
+    path-components
+    [ last ] keep
+    [ length ] keep
+    [ 1 - ] dip
+    remove-nth
+    components-to-path
     ;
+
+: (to-folder-create-folder) ( path name ? -- folder )
+    [ +directory+ swap ]
+    [ +regular-file+ swap ]
+    if
+    folder boa
+    ;
+
+: to-folder-from-path ( path -- folder )
+    [ file-info directory? ] keep
+    (to-folder-split-path)
+    rot
+    (to-folder-create-folder)
+    ;
+
 
 :: full-path ( folder -- path )
     folder path>> "/" append
     folder name>> append
 ;
 
-:: folder-entries ( path -- seq )
-    path expandingTildeInPath
-    normalize-path
-    (directory-entries)
-    [ name>> { "." ".." ".DS_Store" } member? not ] filter
-    [ path to-folder ] map!
+IN: io.directories
+GENERIC: to-folder ( path directory-entry -- folder )
+M: directory-entry to-folder 
+    tuple-slots
+    swap suffix
+    folder prefix
+    >tuple
+    ;
+
+IN: folder
+: folder-entries ( path -- seq )
+    [ expandingTildeInPath normalize-path (directory-entries) ] keep
+    [ [ name>> { "." ".." ".DS_Store" } member? not ] filter ] dip
+    swap [ to-folder ] with map!
     ;
 
 :: folder-content-names ( folder -- seq )
     folder full-path folder-entries
     [ name>> ] map ;
 
-:: folder-link-cwd ( folder -- )
-    cwd "/" append folder name>> append
-    "linking in " over append print
-    folder full-path
-    swap make-link
+: folder-link-cwd-name ( folder -- path )
+    cwd "/" append
+    swap name>> append
+    ;
+    
+: folder-link-cwd ( folder -- )
+    [ folder-link-cwd-name ] keep
+    "linking in " over name>> append print
+    full-path
+    swap
+    [ make-link ]
+    [ (move-aside-error) 2drop ]
+    recover
     ;
 
 : folder-is-name? ( str folder -- ? )
@@ -165,5 +195,4 @@ TUPLE: folder < directory-entry path ;
 
 : folder-in-seq? ( folder seq -- ? )
     swap [ folder-is-name? ] with find drop ;
-
 
