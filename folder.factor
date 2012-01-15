@@ -1,12 +1,12 @@
 ! Copyright (C) 2011 PolyMicro Systems.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: accessors classes.tuple combinators continuations io io.backend
-io.files.info io.files.links io.files.private io.files.types kernel
-locals math math.parser namespaces prettyprint sequences splitting
-strings tools.continuations unix.users ;
+USING: accessors classes.tuple combinators continuations definitions
+io io.backend io.files.info io.files.links io.files.private
+io.files.types kernel locals math math.parser namespaces prettyprint
+sequences sets splitting strings tools.continuations unix.users ;
 
 IN: io.pathnames
-! IN: folders
+! IN: folder
 
 ! GENERIC: trim-whitespace ( str -- 'str )
 ! GENERIC: space? ( n -- ? )
@@ -36,8 +36,7 @@ IN: io.pathnames
     } cond ;
 
 : home-path-?isEmpty ( path -- path' )
-    [ "" = ] keep swap
-    [ drop "/" ] [ ] if
+    [ "" = ] keep "/" swap ?
     ;
     
 : home-path ( path -- newpath )
@@ -96,7 +95,7 @@ IN: io.directories
     recover
     ;
 
-IN: folders
+IN: folder
 
 TUPLE: folder < directory-entry path ;
 
@@ -122,37 +121,34 @@ TUPLE: folder < directory-entry path ;
 
 : expandingTildeInPath ( path -- path )
     dup hasTilde
-    [ replaceTilde ] [ ] if  
-    ;
+    [ replaceTilde ] [ ] if
+;
 
-! IN: string
-: (to-folder-split-path) ( x -- x x )
+IN: io.pathnames
+: split-path ( x -- x x )
     path-components
     [ last ] keep
     [ length ] keep
     [ 1 - ] dip
     remove-nth
     components-to-path
-    ;
+    "/" swap append
+;
 
-: (to-folder-create-folder) ( path name ? -- folder )
+: new-folder ( path name ? -- folder )
     [ +directory+ swap ]
     [ +regular-file+ swap ]
     if
     folder boa
-    ;
+;
 
-: to-folder-from-path ( path -- folder )
+GENERIC: to-folder ( path -- folder )
+M: string to-folder ( path -- folder )
+    normalize-path
     [ file-info directory? ] keep
-    (to-folder-split-path)
+    split-path
     rot
-    (to-folder-create-folder)
-    ;
-
-
-:: full-path ( folder -- path )
-    folder path>> "/" append
-    folder name>> append
+    new-folder
 ;
 
 IN: io.directories
@@ -162,37 +158,87 @@ M: directory-entry to-folder
     swap suffix
     folder prefix
     >tuple
-    ;
+;
 
 IN: folder
-: folder-entries ( path -- seq )
+
+GENERIC: pathname ( folder -- path )
+M: folder pathname 
+    [ path>> "/" append ] keep
+    name>> append
+;
+
+M: folder equal?
+    name>> [ name>> ] dip = ; 
+
+: folder-entries ( folder -- seq )
+    pathname
     [ expandingTildeInPath normalize-path (directory-entries) ] keep
     [ [ name>> { "." ".." ".DS_Store" } member? not ] filter ] dip
     swap [ to-folder ] with map!
-    ;
+;
 
 :: folder-content-names ( folder -- seq )
-    folder full-path folder-entries
+    folder folder-entries
     [ name>> ] map ;
 
 : folder-link-cwd-name ( folder -- path )
     cwd "/" append
     swap name>> append
-    ;
+;
     
 : folder-link-cwd ( folder -- )
     [ folder-link-cwd-name ] keep
     "linking in " over name>> append print
-    full-path
+    pathname
     swap
     [ make-link ]
     [ (move-aside-error) 2drop ]
     recover
-    ;
+;
 
 : folder-is-name? ( str folder -- ? )
     swap name>> =  ;
 
-: folder-in-seq? ( folder seq -- ? )
+: folder-in-string-seq? ( folder string-seq -- ? )
     swap [ folder-is-name? ] with find drop ;
 
+: folder-create ( folder -- )
+    pathname make-directories
+;
+
+: folder-compare ( src-folder dst-folder -- seq )
+    [ folder-entries ] dip
+    folder-entries
+    diff
+    ;
+
+FROM: io.pathnames => to-folder ;
+: (create-test-folders) ( root-path -- )
+    [ make-directories ] keep
+    { "test1" "test2" } [ over swap append ] map nip
+    [ first { "/a" "/b" "/c" "/d" } [ over swap append ] map nip ] keep
+    [ second { "/b" "/d" "/e" "/f" } [ over swap append ] map nip ] keep
+    drop append
+    [ make-directories ] each
+    ;
+
+: test-folder-path ( -- path )
+    \ folder where first
+    parent-directory "test/" append
+    ;
+
+: create-test-folders ( -- )
+    test-folder-path 
+    (create-test-folders)
+    ;
+
+: test-folders ( -- )
+    "resource:work/folder/test/test1" to-folder
+    "resource:work/folder/test/test2" to-folder
+    "Result:" print
+    folder-compare [ name>> . ] each
+    "This is wrong dhould have been" print
+    { "a" "b" "c" "d" } { "b" "d" "e" "f" } diff
+    [ . ] each
+    ;
