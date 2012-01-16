@@ -1,9 +1,9 @@
 ! Copyright (C) 2011 PolyMicro Systems.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: accessors classes.tuple combinators continuations definitions
-io io.backend io.files.info io.files.links io.files.private
-io.files.types kernel locals math math.parser namespaces prettyprint
-sequences sets splitting strings tools.continuations unix.users ;
+USING: accessors ascii classes.tuple combinators continuations io
+io.backend io.files.info io.files.links io.files.private
+io.files.types kernel locals math math.parser namespaces sequences
+sets splitting strings tools.continuations unix.users ;
 
 IN: io.pathnames
 ! IN: folder
@@ -104,6 +104,7 @@ TUPLE: folder < directory-entry path ;
 
 ! C: <folder> folder
 : <folder> ( name type path -- folder ) folder boa ;
+! : folder? ( obj -- ? )   folder instance? ;
 
 ! ( -- derived1 )
 ! folder new-folder ;
@@ -142,8 +143,10 @@ IN: io.pathnames
     folder boa
 ;
 
+IN: string
 GENERIC: to-folder ( path -- folder )
 M: string to-folder ( path -- folder )
+! : to-folder ( path -- folder )
     normalize-path
     [ file-info directory? ] keep
     split-path
@@ -169,9 +172,27 @@ M: folder pathname
 ;
 
 M: folder equal?
-    name>> [ name>> ] dip = ; 
+    ! 2dup
+    [ name>> ] bi@
+    ! over 5 head "Larry" =
+    ! [ break "HERE" drop 2swap 2drop ]
+    ! [ 2swap 2drop ] if
+    = ;
 
-: folder-entries ( folder -- seq )
+M: folder hashcode*
+    ! dup pathname parent-directory write
+    name>> >lower
+    ! dup write
+    hashcode*
+    ! [ name>> ] keep
+    ! swap string-hashcode
+    ! break
+    ! [ ] [ name>> dup rehash-string string-hashcode ] ?if
+    ! ": " write dup . 
+    ;
+
+GENERIC: folder-entries ( folder -- seq )
+M: folder folder-entries
     pathname
     [ expandingTildeInPath normalize-path (directory-entries) ] keep
     [ [ name>> { "." ".." ".DS_Store" } member? not ] filter ] dip
@@ -207,38 +228,42 @@ M: folder equal?
     pathname make-directories
 ;
 
-: folder-compare ( src-folder dst-folder -- seq )
+DEFER: delete-folder
+
+: delete-folder-item ( file|folder -- )
+    [ type>> ] keep
+    swap +directory+ = 
+    [ delete-folder ]
+    [ delete-file ]
+    if
+    ;
+
+: delete-folder ( folder -- )
+    [ folder-entries ] keep
+    swap [ delete-folder-item ] each
+    pathname delete-directory
+    ;
+
+: src-dst-entries ( src-folder dst-folder -- src-entries dst-entries )
     [ folder-entries ] dip
     folder-entries
-    diff
     ;
 
-FROM: io.pathnames => to-folder ;
-: (create-test-folders) ( root-path -- )
-    [ make-directories ] keep
-    { "test1" "test2" } [ over swap append ] map nip
-    [ first { "/a" "/b" "/c" "/d" } [ over swap append ] map nip ] keep
-    [ second { "/b" "/d" "/e" "/f" } [ over swap append ] map nip ] keep
-    drop append
-    [ make-directories ] each
+: folder-diff ( src-folder dst-folder -- seq )
+    src-dst-entries diff
     ;
 
-: test-folder-path ( -- path )
-    \ folder where first
-    parent-directory "test/" append
+: folder-intersect ( src-folder dst-folder -- seq )
+    src-dst-entries intersect
     ;
 
-: create-test-folders ( -- )
-    test-folder-path 
-    (create-test-folders)
+: folder-union ( src-folder dst-folder -- seq )
+    src-dst-entries union
     ;
 
-: test-folders ( -- )
-    "resource:work/folder/test/test1" to-folder
-    "resource:work/folder/test/test2" to-folder
-    "Result:" print
-    folder-compare [ name>> . ] each
-    "This is wrong dhould have been" print
-    { "a" "b" "c" "d" } { "b" "d" "e" "f" } diff
-    [ . ] each
+! GENERIC: move-to-folder ( dst-folder obj -- )
+: move-to-folder ( src dst -- )
+    pathname [ [ pathname ] map ] dip
+    move-files-into
     ;
+
