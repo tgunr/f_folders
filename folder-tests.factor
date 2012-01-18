@@ -31,5 +31,11 @@ FROM: io.pathnames => to-folder ;
     folder-compare [ name>> ] map
     ;
 
+[ { "kernel" } ] [
+    "core" resource-path to-folder [
+        "." to-folder directory-files [ "kernel" = ] filter
+    ] with-directory
+] unit-test
+
 [ { "a" "aa" "c" } ] [ test-compare ] unit-test
 [ { } ] [ "resource:work/folder/test" to-folder dup delete-folder folder-entries ] 

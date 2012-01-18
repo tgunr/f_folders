@@ -1,9 +1,13 @@
 ! Copyright (C) 2011 PolyMicro Systems.
-! See http://factorcode.org/license.txt for BSD license.
-USING: accessors ascii classes.tuple combinators continuations io
-io.backend io.files.info io.files.links io.files.private
-io.files.types kernel locals math math.parser namespaces sequences
-sets splitting strings tools.continuations unix.users ;
+! See http://polymicrosystems.com/license for license details.
+!
+! This vocabulary implements folder entries in a manner similar to directory entries.
+! The primary difference is a folder entry contains the complete path to the entry
+! making it easier to work with and manipulate items.
+
+USING: accessors ascii classes.tuple combinators continuations fry io
+io.backend io.files.info io.files.links io.files.types kernel math
+math.parser namespaces sequences sets splitting strings unix.users ;
 
 IN: io.pathnames
 ! IN: folder
@@ -35,12 +39,12 @@ IN: io.pathnames
         [ f ]
     } cond ;
 
-: home-path-?isEmpty ( path -- path' )
+: root-if-empty ( path -- path' )
     [ "" = ] keep "/" swap ?
     ;
     
 : home-path ( path -- newpath )
-    home-path-?isEmpty
+    root-if-empty
     [ "/" head? ] keep
     path-components swap
     [ home prefix ]                        
@@ -73,7 +77,7 @@ M: string absolute-path
 IN: io.directories
 
 : path-without-extension ( path -- path )
-    [ [ 46 = ] find-last drop ] keep swap head ;
+    [ [ CHAR: . = ] find-last drop ] keep swap head ;
 
 : bump-name ( path -- path )
     dup file-extension string>number [
@@ -126,14 +130,18 @@ TUPLE: folder < directory-entry path ;
 ;
 
 IN: io.pathnames
-: split-path ( x -- x x )
+: split-path ( path -- path stem )
     path-components
+    [  "/" "" ]
+    [
     [ last ] keep
     [ length ] keep
     [ 1 - ] dip
     remove-nth
     components-to-path
     "/" swap append
+    ]
+    if-empty
 ;
 
 : new-folder ( path name ? -- folder )
@@ -191,25 +199,57 @@ M: folder hashcode*
     ! ": " write dup . 
     ;
 
-GENERIC: folder-entries ( folder -- seq )
-M: folder folder-entries
-    pathname
-    [ expandingTildeInPath normalize-path (directory-entries) ] keep
-    [ [ name>> { "." ".." ".DS_Store" } member? not ] filter ] dip
-    swap [ to-folder ] with map!
-;
+GENERIC: (folder-entries) ( folder-entry -- seq )
+FROM: io.directories => (directory-entries) ;
+FROM: string => to-folder ;
+M: folder (folder-entries)
+    [ pathname ] keep
+    [ (directory-entries) ] dip swap
+    [ over pathname "/" append
+      [ name>> ] dip swap append to-folder
+    ] map
+      nip
+    ;
 
-:: folder-content-names ( folder -- seq )
-    folder folder-entries
+! GENERIC: folder-entries ( folder-entry -- seq )
+! FROM: io.directories => to-folder ;
+! M: folder folder-entries
+!     pathname
+!     [ normalize-path (directory-entries) ] keep
+!     [ [ name>> { "." ".." ".DS_Store" } member? not ] filter ] dip
+!     swap [ to-folder ] with map!
+! ;
+
+FROM: string => to-folder ;
+: cwd ( -- folder )
+    cwd to-folder ;
+
+: cd ( folder -- )
+    path>> cd ;
+
+: set-current-directory ( folder -- )
+    pathname set-current-directory ;
+
+: with-folder ( folder quot -- )
+    [ current-folder ] dip  with-variable ; inline
+
+: folder-files ( folder -- seq )
+    folder-entries
     [ name>> ] map ;
 
-: folder-link-cwd-name ( folder -- path )
+: with-folder-entries ( folder quot -- )
+    '[ "" folder-entries @ ] with-folder ; inline
+
+: with-folder-files ( folder quot -- )
+    '[ "" folder-entries @ ] with-folder ; inline
+
+: path-to-cwd ( folder -- path )
     cwd "/" append
     swap name>> append
 ;
     
-: folder-link-cwd ( folder -- )
-    [ folder-link-cwd-name ] keep
+: link-to-cwd ( folder-entry -- )
+    [ path-to-cwd ] keep
     "linking in " over name>> append print
     pathname
     swap
@@ -218,19 +258,19 @@ M: folder folder-entries
     recover
 ;
 
-: folder-is-name? ( str folder -- ? )
+: name=? ( str folder-entry -- ? )
     swap name>> =  ;
 
-: folder-in-string-seq? ( folder string-seq -- ? )
-    swap [ folder-is-name? ] with find drop ;
+: name-in-seq? ( folder-entry string-seq -- ? )
+    swap [ name=? ] with find drop ;
 
-: folder-create ( folder -- )
+: make-folder ( folder -- )
     pathname make-directories
 ;
 
 DEFER: delete-folder
 
-: delete-folder-item ( file|folder -- )
+: delete-folder-entry ( file|folder-entry -- )
     [ type>> ] keep
     swap +directory+ = 
     [ delete-folder ]
@@ -238,9 +278,9 @@ DEFER: delete-folder
     if
     ;
 
-: delete-folder ( folder -- )
+: delete-folder ( folder-entry -- )
     [ folder-entries ] keep
-    swap [ delete-folder-item ] each
+    swap [ delete-folder-entry ] each
     pathname delete-directory
     ;
 
