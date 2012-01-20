@@ -1,10 +1,9 @@
 ! Copyright (C) 2012 PolyMicro Systems.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: accessors definitions folder io.directories io.pathnames kernel
-prettyprint sequences sets tools.continuations tools.test ;
+USING: definitions io.directories io.directories.hierarchy io.files
+io.pathnames kernel sequences tools.test ;
 IN: folder.tests
 
-FROM: io.pathnames => to-folder ;
 : (create-test-folders) ( root-path -- )
     [ make-directories ] keep
     { "test1" "test2" } [ over swap append ] map nip
@@ -15,7 +14,7 @@ FROM: io.pathnames => to-folder ;
     ;
 
 : test-folder-path ( -- path )
-    \ folder where first
+    \  (create-test-folders) where first
     parent-directory "test/" append
     ;
 
@@ -26,16 +25,10 @@ FROM: io.pathnames => to-folder ;
 
 : test-compare ( -- seq )
     create-test-folders
-    "resource:work/folder/test/test1" to-folder
-    "resource:work/folder/test/test2" to-folder
-    folder-compare [ name>> ] map
+    "resource:work/folder/test/test1" 
+    "resource:work/folder/test/test2" 
+    directory-diff
     ;
 
-[ { "kernel" } ] [
-    "core" resource-path to-folder [
-        "." to-folder directory-files [ "kernel" = ] filter
-    ] with-directory
-] unit-test
-
 [ { "a" "aa" "c" } ] [ test-compare ] unit-test
-[ { } ] [ "resource:work/folder/test" to-folder dup delete-folder folder-entries ] 
+[ f ] [ create-test-folders "resource:work/folder/test" dup delete-tree exists? ] unit-test

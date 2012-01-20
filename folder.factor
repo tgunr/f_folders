@@ -5,23 +5,17 @@
 ! The primary difference is a folder entry contains the complete path to the entry
 ! making it easier to work with and manipulate items.
 
-USING: accessors ascii classes.tuple combinators continuations fry io
-io.backend io.files.info io.files.links io.files.types kernel math
-math.parser namespaces sequences sets splitting strings unix.users ;
+USING: accessors ascii checksums checksums.md5 classes.tuple
+combinators continuations fry io io.backend io.directories.hierarchy
+io.files io.files.info io.files.links kernel locals math math.parser
+namespaces prettyprint sequences sets splitting strings
+tools.continuations unix.users ;
 
 IN: io.pathnames
-! IN: folder
 
-! GENERIC: trim-whitespace ( str -- 'str )
-! GENERIC: space? ( n -- ? )
-! GENERIC: tab? ( n -- ? )
-
-! M: fixnum space? ( ch -- ? ) 32 = ;
 : space? ( ch -- ? ) 32 = ;
-! M: fixnum tab? ( ch -- ? ) 9 = ;
 : tab? ( ch -- ? ) 9 = ;
 
-! M: string trim-whitespace ( str -- str' )
 : trim-whitespace ( str -- str' )
     [ [ space? ] [ tab? ] bi or ] trim-head
     [ [ space? ] [ tab? ] bi or ] trim-tail
@@ -29,6 +23,19 @@ IN: io.pathnames
 
 : components-to-path ( seq -- path )
     "/" join
+    ;
+
+: as-directory ( path -- path' )
+    [ last CHAR: / = ] keep
+    swap
+    [ ]
+    [ "/" append ] if
+    ;
+
+: as-file ( path -- path' )
+    [ last CHAR: / = ] keep swap
+    [ [ length ] keep remove-nth! ]
+    [ ] if
     ;
 
 : special-path? ( path -- rest ? )
@@ -80,10 +87,16 @@ IN: io.directories
     [ [ CHAR: . = ] find-last drop ] keep swap head ;
 
 : bump-name ( path -- path )
+    break
     dup file-extension string>number [
         [ path-without-extension "." ] dip 1 +
         number>string 3append
-    ] [ ".1" append ] if* ;
+    ] [ ".1" append ] if*
+    [ exists? ] keep swap
+    [ bump-name ]
+    [ ]
+    if
+    ;
 
 : (move-aside-error) ( error -- )
     "move-aside: Error: " over errno>>
@@ -98,21 +111,6 @@ IN: io.directories
     [ (move-aside-error) 2drop ]
     recover
     ;
-
-IN: folder
-
-TUPLE: folder < directory-entry path ;
-
-! : new-folder ( class -- result )
-!     new 0 >>name ; inline
-
-! C: <folder> folder
-: <folder> ( name type path -- folder ) folder boa ;
-! : folder? ( obj -- ? )   folder instance? ;
-
-! ( -- derived1 )
-! folder new-folder ;
-
 
 : hasTilde ( path -- ? )
     "~" head?
@@ -144,22 +142,25 @@ IN: io.pathnames
     if-empty
 ;
 
-: new-folder ( path name ? -- folder )
-    [ +directory+ swap ]
-    [ +regular-file+ swap ]
-    if
-    folder boa
-;
+IN: folder
+TUPLE: folder-entry < directory-entry path ;
+
+: <folder> ( name type path -- folder ) folder-entry boa ;
+
+IN: io.files.types
+SYMBOL: +nonexistent-file+
 
 IN: string
 GENERIC: to-folder ( path -- folder )
 M: string to-folder ( path -- folder )
-! : to-folder ( path -- folder )
     normalize-path
-    [ file-info directory? ] keep
-    split-path
-    rot
-    new-folder
+    dup 
+    [ file-info type>> ]
+    [ break nip drop +nonexistent-file+ ]
+    recover
+    [ split-path ] dip
+    swap 
+    <folder>
 ;
 
 IN: io.directories
@@ -167,19 +168,19 @@ GENERIC: to-folder ( path directory-entry -- folder )
 M: directory-entry to-folder 
     tuple-slots
     swap suffix
-    folder prefix
+    folder-entry prefix
     >tuple
 ;
 
 IN: folder
 
 GENERIC: pathname ( folder -- path )
-M: folder pathname 
+M: folder-entry pathname 
     [ path>> "/" append ] keep
     name>> append
 ;
 
-M: folder equal?
+M: folder-entry equal?
     ! 2dup
     [ name>> ] bi@
     ! over 5 head "Larry" =
@@ -187,7 +188,7 @@ M: folder equal?
     ! [ 2swap 2drop ] if
     = ;
 
-M: folder hashcode*
+M: folder-entry hashcode*
     ! dup pathname parent-directory write
     name>> >lower
     ! dup write
@@ -202,7 +203,7 @@ M: folder hashcode*
 GENERIC: (folder-entries) ( folder-entry -- seq )
 FROM: io.directories => (directory-entries) ;
 FROM: string => to-folder ;
-M: folder (folder-entries)
+: (directory-entries) ( path -- seq )
     [ pathname ] keep
     [ (directory-entries) ] dip swap
     [ over pathname "/" append
@@ -211,99 +212,127 @@ M: folder (folder-entries)
       nip
     ;
 
-! GENERIC: folder-entries ( folder-entry -- seq )
-! FROM: io.directories => to-folder ;
-! M: folder folder-entries
-!     pathname
-!     [ normalize-path (directory-entries) ] keep
-!     [ [ name>> { "." ".." ".DS_Store" } member? not ] filter ] dip
-!     swap [ to-folder ] with map!
-! ;
-
-FROM: string => to-folder ;
-: cwd ( -- folder )
-    cwd to-folder ;
-
-: cd ( folder -- )
-    path>> cd ;
-
-: set-current-directory ( folder -- )
-    pathname set-current-directory ;
-
-: with-folder ( folder quot -- )
-    [ current-folder ] dip  with-variable ; inline
-
-: folder-files ( folder -- seq )
-    folder-entries
-    [ name>> ] map ;
-
-: with-folder-entries ( folder quot -- )
-    '[ "" folder-entries @ ] with-folder ; inline
-
-: with-folder-files ( folder quot -- )
-    '[ "" folder-entries @ ] with-folder ; inline
-
-: path-to-cwd ( folder -- path )
-    cwd "/" append
-    swap name>> append
-;
-    
-: link-to-cwd ( folder-entry -- )
-    [ path-to-cwd ] keep
-    "linking in " over name>> append print
+GENERIC: folder-entries ( folder-entry -- seq )
+FROM: io.directories => to-folder ;
+! M: folder-entry directory-entries
+: directory-entries ( path -- seq )
     pathname
+    [ normalize-path (directory-entries) ] keep
+    [ [ name>> { "." ".." } member? not ] filter ] dip
+    swap [ to-folder ] with map!
+;
+
+: directory-files ( path -- seq )
+    directory-entries [ name>> ] map ;
+
+: with-directory-entries ( path quot -- )
+    '[ "" directory-entries @ ] with-directory ; inline
+
+: with-directory-files ( path quot -- )
+    '[ "" directory-files @ ] with-directory ; inline
+
+IN: io.directories
+
+: link-to-current-directory ( path -- )
+    [ file-name ] keep 
+    "link: " over append print
+    current-directory get as-directory
+    rot append
+    "  to: " over append print
     swap
     [ make-link ]
     [ (move-aside-error) 2drop ]
     recover
 ;
 
-: name=? ( str folder-entry -- ? )
+: is-directory? ( directory-entry -- ? )
+    type>> +directory+ = ;
+
+: is-file? ( directory-entry -- ? )
+    type>> +regular-file+ = ;
+
+: is-symbolic? ( directory-entry -- ? )
+    type>> +symbolic-link+ = ;
+
+: hidden? ( name -- ? )
+    first CHAR: . = ;
+
+: name=? ( str directory-entry -- ? )
     swap name>> =  ;
 
-: name-in-seq? ( folder-entry string-seq -- ? )
+: name-in-seq? ( directory-entry string-seq -- ? )
     swap [ name=? ] with find drop ;
 
-: make-folder ( folder -- )
-    pathname make-directories
-;
-
-DEFER: delete-folder
-
-: delete-folder-entry ( file|folder-entry -- )
-    [ type>> ] keep
-    swap +directory+ = 
-    [ delete-folder ]
-    [ delete-file ]
-    if
+: src-dst-entries ( src dst -- src-entries dst-entries )
+    [ directory-entries [ name>> ] map ] dip
+    directory-entries [ name>> ] map
     ;
 
-: delete-folder ( folder-entry -- )
-    [ folder-entries ] keep
-    swap [ delete-folder-entry ] each
-    pathname delete-directory
-    ;
+FROM: io.directories.search => each-directory-entry ;
 
-: src-dst-entries ( src-folder dst-folder -- src-entries dst-entries )
-    [ folder-entries ] dip
-    folder-entries
-    ;
-
-: folder-diff ( src-folder dst-folder -- seq )
+: directory-diff ( src dst -- seq )
     src-dst-entries diff
     ;
 
-: folder-intersect ( src-folder dst-folder -- seq )
+: directory-intersect ( src dst -- seq )
     src-dst-entries intersect
     ;
 
-: folder-union ( src-folder dst-folder -- seq )
+: directory-union ( src dst -- seq )
     src-dst-entries union
     ;
 
-! GENERIC: move-to-folder ( dst-folder obj -- )
-: move-to-folder ( src dst -- )
-    pathname [ [ pathname ] map ] dip
-    move-files-into
+: directory-mdmove ( src dst -- )
+    2drop
     ;
 
+: directory-mdmove-intersect ( src dst -- )
+    2drop
+    ;
+
+: wwcd ( -- path )
+    "." normalize-path ;
+
+: checksum= ( file1 file2 -- ? )
+    [ pathname md5 checksum-file ] dip
+    pathname md5 checksum-file =
+    ;
+
+FROM: string => to-folder ;
+:: gather-files ( seq path1 path2 -- seq1 seq2 )
+    path1 as-directory :> path1
+    path2 as-directory :> path2
+    { } { } 
+    seq [ 
+        [ path1 prepend to-folder 
+          dup is-file?
+          [ suffix ] [ drop ] if
+        ] keep 
+        path2 prepend to-folder
+        dup is-file? [ rot swap suffix ] [ drop swap ] if
+        swap
+    ] each
+    ;
+
+:: directory-mddiff ( src dst -- seq )
+    src directory-tree-files
+    dst directory-tree-files
+    intersect
+    [ 1 head "." = not ] filter  
+    src dst gather-files
+    [ [ checksum= ] 2keep rot
+      [ 2drop f ]
+      [ { } swap prefix  swap suffix  ] if
+    ] 2map
+    [ ] filter
+    [ first pathname ] map
+    ;
+
+CONSTANT: f1 "/Sources/OpenPrograph/XMacVPL/Source Marten"
+CONSTANT: f2 "/Sources/OpenPrograph/xmacvpl-pmn/Source Marten"
+
+: mdtest ( -- )
+    f1 f2 directory-mddiff
+    [ name>> ] map
+    [ print ] each
+    ;
