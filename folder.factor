@@ -87,7 +87,6 @@ IN: io.directories
     [ [ CHAR: . = ] find-last drop ] keep swap head ;
 
 : bump-name ( path -- path )
-    break
     dup file-extension string>number [
         [ path-without-extension "." ] dip 1 +
         number>string 3append
@@ -156,7 +155,7 @@ M: string to-folder ( path -- folder )
     normalize-path
     dup 
     [ file-info type>> ]
-    [ break nip drop +nonexistent-file+ ]
+    [ nip drop +nonexistent-file+ ]
     recover
     [ split-path ] dip
     swap 
@@ -254,8 +253,8 @@ IN: io.directories
 : is-symbolic? ( directory-entry -- ? )
     type>> +symbolic-link+ = ;
 
-: hidden? ( name -- ? )
-    first CHAR: . = ;
+: is-hidden? ( directory-entry -- ? )
+    name>> first CHAR: . = ;
 
 : name=? ( str directory-entry -- ? )
     swap name>> =  ;
@@ -294,6 +293,11 @@ FROM: io.directories.search => each-directory-entry ;
     "." normalize-path ;
 
 : checksum= ( file1 file2 -- ? )
+    "progress" get-global
+    [ over pathname  "comparing: " prepend print
+      dup pathname  "      with: " prepend print
+    ]
+    [ ] if
     [ pathname md5 checksum-file ] dip
     pathname md5 checksum-file =
     ;
@@ -304,12 +308,13 @@ FROM: string => to-folder ;
     path2 as-directory :> path2
     { } { } 
     seq [ 
-        [ path1 prepend to-folder 
-          dup is-file?
+        [ path1 prepend to-folder
+          dup is-file?  over is-hidden?  not and
           [ suffix ] [ drop ] if
         ] keep 
         path2 prepend to-folder
-        dup is-file? [ rot swap suffix ] [ drop swap ] if
+        dup is-file? over is-hidden?  not and
+        [ rot swap suffix ] [ drop swap ] if
         swap
     ] each
     ;
@@ -328,8 +333,8 @@ FROM: string => to-folder ;
     [ first pathname ] map
     ;
 
-CONSTANT: f1 "/Sources/OpenPrograph/XMacVPL/Source Marten"
-CONSTANT: f2 "/Sources/OpenPrograph/xmacvpl-pmn/Source Marten"
+CONSTANT: f1 "/Applications/Marten/Marten.app"
+CONSTANT: f2 "/Applications/Marten/Marten\ Server\ 007.app/"
 
 : mdtest ( -- )
     f1 f2 directory-mddiff
