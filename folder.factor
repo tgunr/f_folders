@@ -8,8 +8,8 @@
 USING: accessors ascii checksums checksums.md5 classes.tuple
 combinators continuations fry io io.backend io.directories.hierarchy
 io.files io.files.info io.files.links kernel locals math math.parser
-namespaces prettyprint sequences sets splitting strings
-tools.continuations unix.users ;
+namespaces sequences sets splitting strings tools.continuations
+unix.users ;
 
 IN: io.pathnames
 
@@ -142,9 +142,19 @@ IN: io.pathnames
 ;
 
 IN: folder
+
 TUPLE: folder-entry < directory-entry path ;
 
 : <folder> ( name type path -- folder ) folder-entry boa ;
+
+IN: folder.compare
+TUPLE: folder-compare src-path dst-path src-entries dst-entries ;
+: <folder-compare> ( src dst -- folder.compare )
+    folder-compare new
+    swap >>dst-path
+    swap  >>src-path
+;
+    
 
 IN: io.files.types
 SYMBOL: +nonexistent-file+
@@ -262,31 +272,62 @@ IN: io.directories
 : name-in-seq? ( directory-entry string-seq -- ? )
     swap [ name=? ] with find drop ;
 
-: src-dst-entries ( src dst -- src-entries dst-entries )
-    [ directory-entries [ name>> ] map ] dip
-    directory-entries [ name>> ] map
+SYMBOL: folder-pair
+
+: set-folder-pair-src ( src deep? -- seq )
+    [ directory-tree-files ]
+    [ directory-files ]
+    if
+    folder-pair get  swap >>src-entries
+    src-entries>>
+    ;
+
+: set-folder-pair-dst ( dst deep? -- seq )
+    [ directory-tree-files ]
+    [ directory-files ]
+    if
+    folder-pair get swap >>dst-entries
+    dst-entries>>
+    ;
+
+FROM: namespaces => set ;
+:: set-folder-pair ( src dst deep? -- src-seq dst-seq )
+    src dst <folder-compare> folder-pair set
+    src deep? set-folder-pair-src
+    dst deep? set-folder-pair-dst
+    ;
+
+FROM: namespaces => set ;
+:: src-dst-entries ( src dst deep? -- src-entries dst-entries )
+    src dst deep? set-folder-pair
     ;
 
 FROM: io.directories.search => each-directory-entry ;
 
 : directory-diff ( src dst -- seq )
+    "deep" get-global
     src-dst-entries diff
     ;
 
 : directory-intersect ( src dst -- seq )
+    "deep" get-global
     src-dst-entries intersect
     ;
 
 : directory-union ( src dst -- seq )
+    "deep" get-global
     src-dst-entries union
     ;
 
-: directory-mdmove ( src dst -- )
-    2drop
-    ;
-
-: directory-mdmove-intersect ( src dst -- )
-    2drop
+: directory-move ( src dst -- seq )
+    break
+    "deep" get-global
+    src-dst-entries
+    ! List of files in SRC not in DST
+    
+    ! List of files in SRC and in DST
+    intersect
+    ! List of files in DST not in SRC (prune)
     ;
 
 : wwcd ( -- path )
@@ -319,9 +360,9 @@ FROM: string => to-folder ;
     ] each
     ;
 
-:: directory-mddiff ( src dst -- seq )
-    src directory-tree-files
-    dst directory-tree-files
+:: directory-mddiff ( src dst deep? -- seq )
+    src dst deep? 
+    src-dst-entries
     intersect
     [ 1 head "." = not ] filter  
     src dst gather-files
@@ -337,7 +378,6 @@ CONSTANT: f1 "/Applications/Marten/Marten.app"
 CONSTANT: f2 "/Applications/Marten/Marten\ Server\ 007.app/"
 
 : mdtest ( -- )
-    f1 f2 directory-mddiff
-    [ name>> ] map
+    f1 f2 t directory-mddiff
     [ print ] each
     ;
