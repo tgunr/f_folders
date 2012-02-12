@@ -9,7 +9,7 @@ USING: accessors ascii checksums checksums.md5 classes.tuple
 combinators continuations fry io io.backend io.directories.hierarchy
 io.files io.files.info io.files.links kernel locals math math.parser
 namespaces sequences sets splitting strings tools.continuations
-unix.users ;
+unix.users regexp tools.profiler.sampling ;
 
 IN: io.pathnames
 
@@ -148,7 +148,7 @@ TUPLE: folder-entry < directory-entry path ;
 : <folder> ( name type path -- folder ) folder-entry boa ;
 
 IN: folder.compare
-TUPLE: folder-compare src-path dst-path src-entries dst-entries ;
+TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries ;
 : <folder-compare> ( src dst -- folder.compare )
     folder-compare new
     swap >>dst-path
@@ -176,7 +176,7 @@ IN: io.directories
 GENERIC: to-folder ( path directory-entry -- folder )
 M: directory-entry to-folder 
     tuple-slots
-    swap suffix
+    swap normalize-path suffix
     folder-entry prefix
     >tuple
 ;
@@ -209,7 +209,6 @@ M: folder-entry hashcode*
     ! ": " write dup . 
     ;
 
-GENERIC: (folder-entries) ( folder-entry -- seq )
 FROM: io.directories => (directory-entries) ;
 FROM: string => to-folder ;
 : (directory-entries) ( path -- seq )
@@ -221,11 +220,10 @@ FROM: string => to-folder ;
       nip
     ;
 
-GENERIC: folder-entries ( folder-entry -- seq )
 FROM: io.directories => to-folder ;
+FROM: io.pathnames => pathname ;
 ! M: folder-entry directory-entries
 : directory-entries ( path -- seq )
-    pathname
     [ normalize-path (directory-entries) ] keep
     [ [ name>> { "." ".." } member? not ] filter ] dip
     swap [ to-folder ] with map!
@@ -235,20 +233,20 @@ FROM: io.directories => to-folder ;
     directory-entries [ name>> ] map ;
 
 : with-directory-entries ( path quot -- )
-    '[ "" directory-entries @ ] with-directory ; inline
+    [ [ "" directory-entries ] ] dip compose with-directory ; inline
 
 : with-directory-files ( path quot -- )
-    '[ "" directory-files @ ] with-directory ; inline
+    [ [ "" directory-files ] ] dip compose with-directory ; inline
 
 IN: io.directories
 
 : link-to-current-directory ( path -- )
+    normalize-path
     [ file-name ] keep 
     "link: " over append print
     current-directory get as-directory
     rot append
     "  to: " over append print
-    swap
     [ make-link ]
     [ (move-aside-error) 2drop ]
     recover
@@ -274,7 +272,7 @@ IN: io.directories
 
 SYMBOL: folder-pair
 
-: set-folder-pair-src ( src deep? -- seq )
+: set-folder-pair-src ( src dir-word -- seq )
     [ directory-tree-files ]
     [ directory-files ]
     if
@@ -282,7 +280,7 @@ SYMBOL: folder-pair
     src-entries>>
     ;
 
-: set-folder-pair-dst ( dst deep? -- seq )
+: set-folder-pair-dst ( dst dir-word -- seq )
     [ directory-tree-files ]
     [ directory-files ]
     if
@@ -291,49 +289,87 @@ SYMBOL: folder-pair
     ;
 
 FROM: namespaces => set ;
-:: set-folder-pair ( src dst deep? -- src-seq dst-seq )
-    src dst <folder-compare> folder-pair set
-    src deep? set-folder-pair-src
-    dst deep? set-folder-pair-dst
+:: set-folder-pair ( src dst dir-word -- src-seq dst-seq )
+    src dst <folder-compare>
+    folder-pair set
+    src dir-word set-folder-pair-src
+    dst dir-word set-folder-pair-dst
     ;
 
 FROM: namespaces => set ;
-:: src-dst-entries ( src dst deep? -- src-entries dst-entries )
-    src dst deep? set-folder-pair
+:: src-dst-entries ( src dst dir-word -- src-entries dst-entries )
+    src dst dir-word set-folder-pair
     ;
 
-FROM: io.directories.search => each-directory-entry ;
+: src-folder-entries ( folder.compare -- folder.compare' )
+    [ dup filter>>
+      over src-path>>
+      rot dir-word>> call( path -- seq )
+      [ swap matches? not ] with filter ] keep
+    swap >>src-entries
+;
 
-: directory-diff ( src dst -- seq )
-    "deep" get-global
-    src-dst-entries diff
+: dst-folder-entries ( folder.compare -- folder.compare' )
+    [ dup filter>>
+      over dst-path>>
+      rot dir-word>> call( path -- seq )
+      [ swap matches? not ] with filter ] keep
+    swap >>dst-entries
+;
+
+: set-filter ( filter folder.compare -- folder.compare' )
+    over
+    [ swap <regexp> ]
+    ! a regexp that doesn't match anything
+    [ nip "(?!.*)" <regexp> ]
+    if
+    >>filter
     ;
 
-: directory-intersect ( src dst -- seq )
-    "deep" get-global
-    src-dst-entries intersect
+: set-deep ( dir-word folder.compare -- folder.compare' )
+    swap
+    [ [ directory-tree-files ] >>dir-word ]
+    [ [ directory-files ] >>dir-word ]
+    if
     ;
 
-: directory-union ( src dst -- seq )
-    "deep" get-global
-    src-dst-entries union
+: new-folder-compare ( src dst filter deep? -- folder.compare )
+    [ <folder-compare> ] 2dip
+    swapd swap set-deep set-filter
+    dup src-folder-entries
+    swap dst-folder-entries
+    drop
+;
+
+: folder-compare-entries ( folder.compare -- src-entries dst-entries )
+    dup src-entries>>
+    [ dst-entries>> ] dip
+;
+
+: directory-diff ( folder.compare -- seq )
+   folder-compare-entries diff
+   ;
+
+: directory-intersect ( folder.compare -- seq )
+    folder-compare-entries intersect
     ;
 
-: directory-move ( src dst -- seq )
-    break
-    "deep" get-global
-    src-dst-entries
+: directory-union ( folder.compare -- seq )
+    folder-compare-entries union
+    ;
+
+: directory-move ( folder.compare -- seq )
     ! List of files in SRC not in DST
-    
+    folder-compare-entries diff
     ! List of files in SRC and in DST
-    intersect
     ! List of files in DST not in SRC (prune)
     ;
 
 : wwcd ( -- path )
     "." normalize-path ;
 
-: checksum= ( file1 file2 -- ? )
+FROM: folder => pathname ;
+: checksum= ( folder-entry1 folder-entry2 -- ? )
     "progress" get-global
     [ over pathname  "comparing: " prepend print
       dup pathname  "      with: " prepend print
@@ -344,9 +380,9 @@ FROM: io.directories.search => each-directory-entry ;
     ;
 
 FROM: string => to-folder ;
-:: gather-files ( seq path1 path2 -- seq1 seq2 )
-    path1 as-directory :> path1
-    path2 as-directory :> path2
+:: gather-files ( seq folder.compare -- seq1 seq2 )
+    folder.compare src-path>> as-directory :> path1
+    folder.compare dst-path>> as-directory :> path2
     { } { } 
     seq [ 
         [ path1 prepend to-folder
@@ -360,24 +396,30 @@ FROM: string => to-folder ;
     ] each
     ;
 
-:: directory-mddiff ( src dst deep? -- seq )
-    src dst deep? 
-    src-dst-entries
-    intersect
-    [ 1 head "." = not ] filter  
-    src dst gather-files
+:: directory-md5diff ( folder.compare -- seq )
+    [
+        folder.compare folder-compare-entries intersect
+        folder.compare gather-files    
     [ [ checksum= ] 2keep rot
       [ 2drop f ]
       [ { } swap prefix  swap suffix  ] if
     ] 2map
     [ ] filter
     [ first pathname ] map
+    ] profile
     ;
 
-CONSTANT: f1 "/Applications/Marten/Marten.app"
-CONSTANT: f2 "/Applications/Marten/Marten\ Server\ 007.app/"
+CONSTANT: f1 "/Sources/OpenPrograph/XMacVPL/Source Marten/Sections"
+CONSTANT: f2 "/Sources/OpenPrograph/XMacVPL/Source Marten.1/Sections"
+
+: mdtestfilter ( -- )
+    f1 f2 "\\..*" t new-folder-compare
+    directory-diff
+    [ print ] each
+    ;
 
 : mdtest ( -- )
-    f1 f2 t directory-mddiff
+    f1 f2 "\\..*" t new-folder-compare
+    directory-md5diff
     [ print ] each
     ;

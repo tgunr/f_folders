@@ -1,8 +1,21 @@
 ! Copyright (C) 2012 PolyMicro Systems.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: definitions io.directories io.directories.hierarchy io.files
-io.pathnames kernel sequences tools.test ;
+USING: combinators definitions io io.directories
+io.directories.hierarchy io.encodings.utf8 io.files io.pathnames
+kernel namespaces sequences tools.test ;
 IN: folder.tests
+
+CONSTANT: TESTf "resource:work/folder/test"
+SYMBOL: testfolder
+
+: create-test-files ( path -- )
+    dup make-directories
+    dup file-name
+    {
+        { "a" [ "/a-file" append utf8 [ "aaaa" print ] with-file-writer ] }
+        [ 2drop ]
+    } case
+    ;
 
 : (create-test-folders) ( root-path -- )
     [ make-directories ] keep
@@ -10,12 +23,13 @@ IN: folder.tests
     [ first { "/a" "/b" "/c" "/d" "/aa" "/bb" } [ over swap append ] map nip ] keep
     [ second { "/b" "/d" "/e" "/f" "/bb" } [ over swap append ] map nip ] keep
     drop append
-    [ make-directories ] each
+    [ create-test-files ] each
     ;
 
 : test-folder-path ( -- path )
     \  (create-test-folders) where first
     parent-directory "test/" append
+    dup testfolder set
     ;
 
 : create-test-folders ( -- )
@@ -23,12 +37,13 @@ IN: folder.tests
     (create-test-folders)
     ;
 
-: test-compare ( -- seq )
+: test-compare ( -- seq x )
     create-test-folders
     "resource:work/folder/test/test1" 
     "resource:work/folder/test/test2" 
     directory-diff
     ;
 
-[ { "a" "aa" "c" } ] [ test-compare ] unit-test
-[ f ] [ create-test-folders "resource:work/folder/test" dup delete-tree exists? ] unit-test
+[ t ] [ create-test-folders t ] unit-test
+! [ { "a" "aa" "c" } ] [ test-compare ] unit-test
+! [ f ] [ TESTf dup delete-tree exists? ] unit-test
