@@ -44,6 +44,21 @@ SYMBOL: testfolder
     directory-diff
     ;
 
+CONSTANT: f1 "/Sources/OpenPrograph/XMacVPL/Source Marten/Sections"
+CONSTANT: f2 "/Sources/OpenPrograph/XMacVPL/Source Marten.1/Sections"
+
+: mdtestfilter ( -- )
+    f1 f2 "\\..*" t new-folder-compare
+    directory-diff
+    [ print ] each
+    ;
+
+: mdtest ( -- )
+    f1 f2 "\\..*" t new-folder-compare
+    directory-md5diff
+    [ print ] each
+    ;
+
 [ t ] [ create-test-folders t ] unit-test
 ! [ { "a" "aa" "c" } ] [ test-compare ] unit-test
 ! [ f ] [ TESTf dup delete-tree exists? ] unit-test

@@ -105,6 +105,7 @@ IN: io.directories
 ;
 
 : move-aside ( path -- )
+    break
     dup bump-name
     [ move-file ]
     [ (move-aside-error) 2drop ]
@@ -240,14 +241,19 @@ FROM: io.pathnames => pathname ;
 
 IN: io.directories
 
+: print-linking ( path1 path2 -- )
+    swap "link: " prepend print
+    "  to: " prepend print
+;
+
 : link-to-current-directory ( path -- )
     normalize-path
-    [ file-name ] keep 
-    "link: " over append print
-    current-directory get as-directory
-    rot append
-    "  to: " over append print
-    [ make-link ]
+    dup file-name
+    current-directory get as-directory prepend
+    2dup print-linking
+    over exists?
+    [ over move-aside ] [ ] if
+    [ swap make-link ]
     [ (move-aside-error) 2drop ]
     recover
 ;
@@ -409,17 +415,3 @@ FROM: string => to-folder ;
     ] profile
     ;
 
-CONSTANT: f1 "/Sources/OpenPrograph/XMacVPL/Source Marten/Sections"
-CONSTANT: f2 "/Sources/OpenPrograph/XMacVPL/Source Marten.1/Sections"
-
-: mdtestfilter ( -- )
-    f1 f2 "\\..*" t new-folder-compare
-    directory-diff
-    [ print ] each
-    ;
-
-: mdtest ( -- )
-    f1 f2 "\\..*" t new-folder-compare
-    directory-md5diff
-    [ print ] each
-    ;
