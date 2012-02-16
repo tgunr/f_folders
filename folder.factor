@@ -105,7 +105,6 @@ IN: io.directories
 ;
 
 : move-aside ( path -- )
-    break
     dup bump-name
     [ move-file ]
     [ (move-aside-error) 2drop ]
