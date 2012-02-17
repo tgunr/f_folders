@@ -9,7 +9,7 @@ USING: accessors ascii checksums checksums.md5 classes.tuple
 combinators continuations fry io io.backend io.directories.hierarchy
 io.files io.files.info io.files.links kernel locals math math.parser
 namespaces sequences sets splitting strings tools.continuations
-unix.users regexp tools.profiler.sampling ;
+unix.users regexp tools.profiler.sampling libc ;
 
 IN: io.pathnames
 
@@ -104,9 +104,14 @@ IN: io.directories
       " " append swap args>> second append print
 ;
 
+: remove-acl ( path -- )
+    "chmod -N " prepend
+    system drop
+    ;
+
 : move-aside ( path -- )
     dup bump-name
-    [ move-file ]
+    [ over remove-acl move-file ]
     [ (move-aside-error) 2drop ]
     recover
     ;
@@ -250,9 +255,9 @@ IN: io.directories
     dup file-name
     current-directory get as-directory prepend
     2dup print-linking
-    over exists?
-    [ over move-aside ] [ ] if
-    [ swap make-link ]
+    dup exists?
+    [ dup move-aside ] [ ] if
+    [ make-link ]
     [ (move-aside-error) 2drop ]
     recover
 ;
