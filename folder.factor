@@ -9,7 +9,7 @@ USING: accessors ascii checksums checksums.md5 classes.tuple
 combinators continuations fry io io.backend io.directories.hierarchy
 io.files io.files.info io.files.links kernel locals math math.parser
 namespaces sequences sets splitting strings tools.continuations
-unix.users regexp tools.profiler.sampling libc ;
+unix.users regexp tools.profiler.sampling libc macros ;
 
 IN: io.pathnames
 
@@ -327,11 +327,14 @@ FROM: namespaces => set ;
     swap >>dst-entries
 ;
 
+: regexp-nothing ( -- regexp )  "(?!.*)" ;
+: regexp-hidden ( -- regexp ) "[.].*" ;
+
 : set-filter ( filter folder.compare -- folder.compare' )
     over
     [ swap <regexp> ]
     ! a regexp that doesn't match anything
-    [ nip "(?!.*)" <regexp> ]
+    [ nip regexp-nothing <regexp> ]
     if
     >>filter
     ;
@@ -345,7 +348,7 @@ FROM: namespaces => set ;
 
 : new-folder-compare ( src dst filter deep? -- folder.compare )
     [ <folder-compare> ] 2dip
-    swapd swap set-deep set-filter
+    rot set-deep set-filter
     dup src-folder-entries
     swap dst-folder-entries
     drop
@@ -419,3 +422,12 @@ FROM: string => to-folder ;
     ] profile
     ;
 
+: directory-rm-intersect ( src dst -- )
+    break
+    regexp-hidden f  new-folder-compare
+    [ directory-intersect ] keep
+    dst-path>> as-directory swap 
+    [ over prepend ] map
+    [ delete-file ] each
+    drop
+    ;
