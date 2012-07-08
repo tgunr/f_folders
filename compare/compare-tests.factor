@@ -1,0 +1,62 @@
+! Copyright (C) 2012 Dave Carlton.
+! See http://factorcode.org/license.txt for BSD license.
+USING: combinators folder.compare io io.directories io.encodings.utf8
+io.files io.pathnames kernel namespaces sequences ;
+
+IN: folder.compare.tests
+
+: create-test-file ( path filename content -- )
+    [ append ] dip
+    [ print ] curry
+    utf8 swap
+    with-file-writer ;
+
+: create-test-files ( path -- )
+    dup make-directories
+    dup file-name
+    {
+        { "a" [ "/a-file" "aaaa" create-test-file ] }
+        { "b" [ "/b-file" "bbbb" create-test-file ] }
+        { "c" [ "/c-file" "cccc" create-test-file ] }
+        { "d" [ "/d-file" "dddd" create-test-file ] }
+        [ 2drop ]
+    } case
+    ;
+
+: create-abcd-folders ( -- )
+    test-folder-delete
+    testfolder get [ make-directories ] keep
+    { "test1" "test2" } [ over swap append ] map nip
+    [ first { "/a" "/b" "/c"  } [ over swap append ] map nip ] keep
+    [ second { "/c" "/d" } [ over swap append ] map nip ] keep
+    drop append
+    [ create-test-files ] each
+    ;
+
+
+CONSTANT: f1 "resource:work/folder/test/test1" 
+CONSTANT: f2 "resource:work/folder/test/test2" 
+
+: abcd-folders ( -- folder.compare )
+    create-abcd-folders
+    f1 f2 "\\..*" t folder.compare-new
+    ;
+
+! [ t ] [ set-test-folder-path t ] unit-test
+! [ { "a" "a/a-file" "b" "b/b-file" } ] [ abcd-folders directory-diff ] unit-test
+! [ { "a" "a/a-file" "b" "b/b-file" "c" "c/c-file" "d" "d/d-file" } ] [ abcd-folders directory-union ] unit-test
+! [ { "c" "c/c-file" } ] [ abcd-folders directory-intersect ] unit-test
+
+: mdtestfilter ( -- )
+    f1 f2 "\\..*" t folder.compare-new
+    directory-diff
+    [ print ] each
+    ;
+
+FROM: folder => pathname ;
+: mdtest ( -- )
+    f1 f2 "\\..*" t folder.compare-new
+    md5diff
+    [ first pathname print ] each 
+    ;
+ 
