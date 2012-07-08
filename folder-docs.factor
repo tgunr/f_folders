@@ -1,9 +1,19 @@
 ! Copyright (C) 2012 PolyMicro Systems.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: help.markup help.syntax io.directories kernel quotations
-sequences strings prettyprint ;
+USING: help.markup help.syntax images io.backend io.directories kernel
+quotations sequences strings ;
 
 IN: io.pathnames
+HELP: space?
+{ $values { "ch" "character to compare" } { "?" "truth value" } }
+{ $description "Compares character with space" }
+;
+
+HELP: tab?
+{ $values { "ch" "character to compare" } { "?" "truth value" } }
+{ $description "Compares character with tab" }
+;
+
 HELP: bump-name
 { $values
   { "path" string }
@@ -108,3 +118,109 @@ $nl
 
 
 ABOUT: "folder"
+
+HELP: as-directory
+{ $values { "path" string } { "path'" string } }
+{ $description "Returns a given as a directory path. A trailing / is added if needed" }
+{ $examples
+  { $code 
+        "/Applications as-directory"
+    ""
+    "--- Data stack:"
+    "/Applications/"
+    }
+}
+;
+
+HELP: special-path?
+{ $values { "path" string } { "rest"string } { "?" boolean } }
+{ $description "Determines if a path is special, e.g. begins with resource: vocab: or ~" }
+{ $examples
+  { $code 
+    "\"~/Desktop\" special-path?"
+    ""
+    "--- Data stack:"
+    "\"/Desktop\""
+    "t"
+    ""
+  }
+}
+{ $notes "No Notes" }
+;
+
+HELP: as-file
+{ $values { "path" pathname } { "path'" pathname } }
+{ $description "Converts path to file, strips any trailing /" }
+{ $examples
+  { $code
+    "USING: folder ;"
+    "\"/Applications/iTunes.app/\" as-file"
+  }
+}
+;
+
+HELP: root?
+{ $values { "path" string } { "path'" string } }
+{ $description "Converts an empty string (given as a path) into the root path \ " }
+;
+
+HELP: home-path
+{ $values { "path" string } { "newpath" string } }
+{ $description "Prefixes the user home path to a path" }
+{ $notes "Used to expand a ~ in a path to a user home folder e.g. ~davec/path becomes "
+" /Users/davec/path"
+}
+;
+
+IN: io.pathnames-docs
+HELP: absolute-path
+{ $values
+    { "path" "a pathname string" }
+    { "path'" "a pathname string" }
+}
+{ $description "Prepends the " { $link current-directory } " to the pathname and resolves a "
+  { $snippet "resource:" } ", " { $snippet "~" } " or " { $snippet "~user" }
+  " or " { $snippet "vocab:" }
+  " prefix, if present (see " { $link "io.pathnames.special" } ")." }
+{ $notes "This word is exactly the same as " { $link normalize-path } ", except on Windows NT platforms, where it does not prepend the Unicode path prefix. Most code should call " { $link normalize-path } " instead." } ;
+
+IN: pathname-docs
+ARTICLE: "io.pathnames.special" "Special pathnames"
+"If a pathname begins with " { $snippet "resource:" } ", it is resolved relative to the directory containing the current image (see " { $link image } ")."
+$nl
+"If a pathname begins with " { $snippet "vocab:" } ", then it will be searched for in all current vocabulary roots (see " { $link "add-vocab-roots" } ")."
+$nl
+"If a pathname begins with " { $snippet "~" } ", it will be searched for in the home directory. Subsequent tildes in the pathname will be construed as literal tilde path or filenames and will not be treated specially. To access a filename named " { $snippet "~" } ", you must construct a path to reference the filename, even if it's within the current directory such as " { $snippet "./~" } "."
+$nl
+"If a pathname begins with " { $snippet "~" } " and followed by a user name e.g."
+{ $snippet "~root" } ", it will be searched for in that users home folder."
+;
+
+
+IN: folder-docs
+HELP: remove-extension
+{ $values { "path" string } { "path" string } }
+{ $description "Removes the last extenstion of a path." }
+{ $examples
+  { $code 
+    "\"/path/file.ext\" remove-extension print"
+    "/path/file"
+  }
+}
+;
+
+HELP: remove-acl
+{ $values { "path" string } }
+{ $description "Removes all ACL from a path." }
+;
+
+HELP: to-folder
+{ $values { "path" string } { "folder" folder-entry } }
+{ $description "Converts a path as string into a folder object." }
+{ $examples
+  { $code 
+        "~/Desktop" to-folder
+    }
+}
+{ $notes "No Notes" }
+;

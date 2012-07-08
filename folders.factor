@@ -80,7 +80,10 @@ IN: io.directories
     dup file-extension string>number [
         [ path-without-extension "." ] dip 1 +
         number>string 3append
-    ] [ ".1" append ] if* ;
+    ] [ ".1" append ] if*
+    dup exists?
+    [ bump-name ] [ ] if
+    ;
 
 : (move-aside-error) ( error -- )
     "move-aside: Error: " over errno>>
@@ -90,6 +93,7 @@ IN: io.directories
 ;
 
 : move-aside ( path -- )
+    break
     dup bump-name
     [ move-file ]
     [ (move-aside-error) 2drop ]

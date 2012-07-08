@@ -8,57 +8,28 @@ IN: folder.tests
 CONSTANT: TESTf "resource:work/folder/test"
 SYMBOL: testfolder
 
-: create-test-files ( path -- )
-    dup make-directories
-    dup file-name
-    {
-        { "a" [ "/a-file" append utf8 [ "aaaa" print ] with-file-writer ] }
-        [ 2drop ]
-    } case
-    ;
+: test-folder-delete ( -- )
+    testfolder get delete-tree ;
 
-: (create-test-folders) ( root-path -- )
-    [ make-directories ] keep
-    { "test1" "test2" } [ over swap append ] map nip
-    [ first { "/a" "/b" "/c" "/d" "/aa" "/bb" } [ over swap append ] map nip ] keep
-    [ second { "/b" "/d" "/e" "/f" "/bb" } [ over swap append ] map nip ] keep
-    drop append
-    [ create-test-files ] each
-    ;
-
-: test-folder-path ( -- path )
-    \  (create-test-folders) where first
+: set-test-folder-path ( -- )
+    \  testfolder where first
     parent-directory "test/" append
-    dup testfolder set
+    testfolder set
     ;
 
-: create-test-folders ( -- )
-    test-folder-path 
-    (create-test-folders)
-    ;
+[ t ] [ "   test   " trim-whitespace "test" = ] unit-test
+[ t ] [ [ "~" "factor" ] components-to-path "~/factor" = ] unit-test
+[ t ] [ "directory" as-directory "directory/" = ] unit-test
+[ t ] [ "directory/" as-directory "directory/" = ] unit-test
+[ t ] [ "directory" as-file "directory" = ] unit-test
+[ t ] [ "directory/" as-file "directory" = ] unit-test
+[ f ] [ "directory" special-path? swap "directory" = and ] unit-test
+[ t ] [ "resource:directory" special-path? swap "directory" = and ] unit-test
+[ t ] [ "vocab:directory" special-path? swap "directory" = and ] unit-test
+[ t ] [ "~directory" special-path? swap "directory" = and ] unit-test 
+[ t ] [ "~/directory" special-path? swap "/directory" = and ] unit-test 
+[ t ] [ "" root? "/" = ] unit-test
+[ f ] [ "/folder" root? "/" = ] unit-test
 
-: test-compare ( -- seq x )
-    create-test-folders
-    "resource:work/folder/test/test1" 
-    "resource:work/folder/test/test2" 
-    directory-diff
-    ;
 
-CONSTANT: f1 "/Sources/OpenPrograph/XMacVPL/Source Marten/Sections"
-CONSTANT: f2 "/Sources/OpenPrograph/XMacVPL/Source Marten.1/Sections"
-
-: mdtestfilter ( -- )
-    f1 f2 "\\..*" t new-folder-compare
-    directory-diff
-    [ print ] each
-    ;
-
-: mdtest ( -- )
-    f1 f2 "\\..*" t new-folder-compare
-    directory-md5diff
-    [ print ] each
-    ;
-
-[ t ] [ create-test-folders t ] unit-test
-! [ { "a" "aa" "c" } ] [ test-compare ] unit-test
 ! [ f ] [ TESTf dup delete-tree exists? ] unit-test
