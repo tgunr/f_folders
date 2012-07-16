@@ -3,6 +3,12 @@
 USING: help.markup help.syntax kernel ;
 IN: folder.compare
 
+ARTICLE: "folder.compare" "folder.compare"
+{ $vocab-link "folder.compare" }
+;
+
+ABOUT: "folder.compare"
+
 HELP: <folder-compare>
 { $values { "src" "path to source folder" } { "dst" "path to destination folder" } { "folder.compare" "value" } }
 { $description "Creates an instance of a folder-compare object." }
@@ -16,8 +22,7 @@ HELP: rm
 
 ;
   
-ARTICLE: "folder.compare" "folder.compare"
-{ $vocab-link "folder.compare" }
+HELP: set-deep
+{ $values { "folder.compare" "folder.compare" } { "t|f" boolean } { "folder.compare'" "folder.compare" } }
+{ $description "Sets the property for deep or shallow inspection" }
 ;
-
-ABOUT: "folder.compare"

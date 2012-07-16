@@ -6,10 +6,9 @@
 ! making it easier to work with and manipulate items.
 
 USING: accessors ascii checksums checksums.md5 classes.tuple
-combinators continuations io io.backend
-io.directories.hierarchy io.files io.files.info io.files.links kernel
-libc locals math math.parser namespaces regexp sequences sets
-splitting strings tools.profiler.sampling unix.users prettyprint.custom ;
+combinators continuations io io.backend io.files io.files.info
+io.files.links kernel libc math math.parser namespaces
+prettyprint.custom sequences splitting strings unix.users ;
 
 IN: io.pathnames
 
@@ -269,3 +268,4 @@ FROM: folder => pathname ;
     [ pathname md5 checksum-file ] dip
     pathname md5 checksum-file =
     ;
+

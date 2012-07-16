@@ -1,8 +1,8 @@
 ! Copyright (C) 2012 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: accessors folder io.directories io.directories.hierarchy
-io.pathnames kernel locals namespaces regexp sequences sets ;
-
+USING: accessors classes combinators folder io io.directories
+io.directories.hierarchy io.pathnames kernel locals namespaces regexp
+sequences sets strings ;
 IN: folder.compare
 
 TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries ;
@@ -62,17 +62,17 @@ FROM: namespaces => set ;
 : regexp-nothing ( -- regexp )  "(?!.*)" ;
 : regexp-hidden ( -- regexp ) "[.].*" ;
 
-: set-filter ( filter folder.compare -- folder.compare' )
-    over
-    [ swap <regexp> ]
-    ! a regexp that doesn't match anything
-    [ nip regexp-nothing <regexp> ]
-    if
-    >>filter
+: set-filter ( folder.compare filter -- folder.compare' )
+    dup class-of
+    {
+        { string [ <regexp> ] }
+        { regexp [ ] }
+        [ 2drop regexp-nothing <regexp> ]
+    } case
+    >>filter 
     ;
 
-: set-deep ( dir-word folder.compare -- folder.compare' )
-    swap
+: set-deep ( folder.compare t|f -- folder.compare' )
     [ [ directory-tree-files ] >>dir-word ]
     [ [ directory-files ] >>dir-word ]
     if
@@ -80,15 +80,38 @@ FROM: namespaces => set ;
 
 : folder.compare-new ( src dst filter deep? -- folder.compare )
     [ <folder-compare> ] 2dip
-    rot set-deep set-filter
-    dup set-src-entries
-    swap set-dst-entries
-    drop
+    [ set-filter ] dip set-deep
+    set-src-entries
+    set-dst-entries
 ;
 
+GENERIC: to-folder-compare ( src dst -- folder.compare )
+M: string to-folder-compare
+    <folder-compare> ;
+
+FROM: folder => pathname ;
+M: folder-entry to-folder-compare
+    swap pathname
+    swap pathname
+    <folder-compare> ;
+
+: src-entries ( folder.compare -- seq )
+    dup
+    src-entries>> dup
+    [ nip ]
+    [ drop set-src-entries src-entries>> ] if 
+    ;
+
+: dst-entries ( folder.compare -- seq )
+    dup
+    dst-entries>> dup
+    [ nip ] 
+    [ drop set-dst-entries dst-entries>> ] if
+    ;
+
 : folder-entries ( folder.compare -- src-entries dst-entries )
-    dup src-entries>>
-    swap dst-entries>>
+    dup src-entries    
+    swap dst-entries
 ;
 
 : folder-diff ( folder.compare -- seq )
@@ -137,7 +160,7 @@ FROM: folder => pathname ;
       swap prefix
     ] 2map
      [ first ] filter
-     [ 1 tail ] map
+     [ 1 tail first ] map
     ;
 
 : rm ( folder.compare mode -- x )
@@ -148,4 +171,25 @@ FROM: folder => pathname ;
     drop
     ;
 
+CONSTANT: f3 "/Volumes/data/Users/davec/Dropbox/FactorWork"
+CONSTANT: f4 "/Volumes/data/Users/davec/Dropbox/FactorWork.1"
+FROM: folder => pathname ;
+: compare-this ( -- x )
+    f3 f4 R/ .*[.]git.*/ t folder.compare-new
+    ;
 
+: test-diff ( -- )
+    compare-this folder-diff [ print ] each
+    ;
+ 
+: test-intersect ( -- )
+    compare-this folder-intersect [ print ] each
+    ;
+
+: test-union ( -- )
+    compare-this folder-union [ print ] each
+    ;
+
+: test-md5 ( -- )
+    compare-this md5diff [ pathname print ] each
+    ;

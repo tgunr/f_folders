@@ -58,10 +58,11 @@ CONSTANT: f2 "resource:work/folder/test/test2"
     [ print ] each
     ;
 
+CONSTANT: f3 "/Volumes/data/Users/davec/Dropbox/FactorWork"
+CONSTANT: f4 "/Volumes/data/Users/davec/Dropbox/FactorWork.1"
 FROM: folder => pathname ;
 : mdtest ( -- )
-    f1 f2 "\\..*" t folder.compare-new
-    md5diff
-    [ first pathname print ] each 
+    f3 f4 "\\..*" t folder.compare-new
+    folder-diff
     ;
  
