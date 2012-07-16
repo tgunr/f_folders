@@ -1,7 +1,7 @@
 ! Copyright (C) 2012 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: combinators folder.compare io io.directories io.encodings.utf8
-io.files io.pathnames kernel namespaces sequences ;
+USING: combinators folder.compare folder.tests io io.directories io.encodings.utf8
+io.files io.pathnames kernel namespaces sequences tools.test ;
 
 IN: folder.compare.tests
 
@@ -24,6 +24,9 @@ IN: folder.compare.tests
     ;
 
 : create-abcd-folders ( -- )
+    testfolder get
+    [ ]
+    [ set-test-folder-path ] if
     test-folder-delete
     testfolder get [ make-directories ] keep
     { "test1" "test2" } [ over swap append ] map nip
@@ -42,14 +45,16 @@ CONSTANT: f2 "resource:work/folder/test/test2"
     f1 f2 "\\..*" t folder.compare-new
     ;
 
-! [ t ] [ set-test-folder-path t ] unit-test
-! [ { "a" "a/a-file" "b" "b/b-file" } ] [ abcd-folders directory-diff ] unit-test
-! [ { "a" "a/a-file" "b" "b/b-file" "c" "c/c-file" "d" "d/d-file" } ] [ abcd-folders directory-union ] unit-test
-! [ { "c" "c/c-file" } ] [ abcd-folders directory-intersect ] unit-test
+! Try the basic first
+[ t ] [ set-test-folder-path t ] unit-test
+[ { "a" "a/a-file" "b" "b/b-file" } ] [ abcd-folders folder-diff ] unit-test
+[ { "a" "a/a-file" "b" "b/b-file" "c" "c/c-file" "d" "d/d-file" } ] [ abcd-folders folder-union ] unit-test
+[ { "c" "c/c-file" } ] [ abcd-folders folder-intersect ] unit-test
+
 
 : mdtestfilter ( -- )
     f1 f2 "\\..*" t folder.compare-new
-    directory-diff
+    folder-diff
     [ print ] each
     ;
 

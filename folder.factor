@@ -9,7 +9,7 @@ USING: accessors ascii checksums checksums.md5 classes.tuple
 combinators continuations io io.backend
 io.directories.hierarchy io.files io.files.info io.files.links kernel
 libc locals math math.parser namespaces regexp sequences sets
-splitting strings tools.profiler.sampling unix.users ;
+splitting strings tools.profiler.sampling unix.users prettyprint.custom ;
 
 IN: io.pathnames
 
@@ -202,21 +202,22 @@ FROM: string => to-folder ;
 
 FROM: io.directories => to-folder ;
 FROM: io.pathnames => pathname ;
-! M: folder-entry directory-entries
 : directory-entries ( path -- seq )
     [ normalize-path (directory-entries) ] keep
     [ [ name>> { "." ".." } member? not ] filter ] dip
     swap [ to-folder ] with map!
 ;
 
-: directory-files ( path -- seq )
-    directory-entries [ name>> ] map ;
+! : directory-files ( path -- seq )
+!     directory-entries [ name>> ] map ;
 
 : with-directory-entries ( path quot -- )
     [ [ "" directory-entries ] ] dip compose with-directory ; inline
 
 : with-directory-files ( path quot -- )
     [ [ "" directory-files ] ] dip compose with-directory ; inline
+
+M: folder-entry pprint* pprint-object ;
 
 IN: io.directories
 
@@ -268,4 +269,3 @@ FROM: folder => pathname ;
     [ pathname md5 checksum-file ] dip
     pathname md5 checksum-file =
     ;
-

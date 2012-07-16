@@ -1,7 +1,7 @@
 ! Copyright (C) 2012 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: accessors io.directories io.directories.hierarchy io.pathnames
-kernel locals make namespaces regexp sequences sets ;
+USING: accessors folder io.directories io.directories.hierarchy
+io.pathnames kernel locals namespaces regexp sequences sets ;
 
 IN: folder.compare
 
@@ -12,7 +12,6 @@ TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries 
     swap  >>src-path
 ;
     
-
 SYMBOL: folder-pair
 
 : set-folder-pair-src ( src dir-word -- seq )
@@ -92,19 +91,19 @@ FROM: namespaces => set ;
     swap dst-entries>>
 ;
 
-: directory-diff ( folder.compare -- seq )
+: folder-diff ( folder.compare -- seq )
    folder-entries diff
    ;
 
-: directory-intersect ( folder.compare -- seq )
+: folder-intersect ( folder.compare -- seq )
     folder-entries intersect
     ;
 
-: directory-union ( folder.compare -- seq )
+: folder-union ( folder.compare -- seq )
     folder-entries union
     ;
 
-: directory-move ( folder.compare -- seq )
+: folder-move ( folder.compare -- seq )
     ! List of files in SRC not in DST
     folder-entries diff
     ! List of files in SRC and in DST
