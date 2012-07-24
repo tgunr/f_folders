@@ -136,6 +136,14 @@ TUPLE: folder-entry < directory-entry path ;
 
 : <folder> ( name type path -- folder ) folder-entry boa ;
 
+! Accessors
+: «name ( folder.entry -- name folder.entry )
+    [ name>> ] keep ;
+: «type ( folder.entry -- type folder.entry )
+    [ type>> ] keep ;
+: «path ( folder.entry -- path folder.entry )
+    [ path>> ] keep ;
+
 IN: io.files.types
 SYMBOL: +nonexistent-file+
 
@@ -268,4 +276,5 @@ FROM: folder => pathname ;
     [ pathname md5 checksum-file ] dip
     pathname md5 checksum-file =
     ;
+
 
