@@ -196,33 +196,36 @@ M: folder-entry hashcode*
     ! ": " write dup . 
     ;
 
+FROM: io.pathnames => absolute-path ;
+M: folder-entry absolute-path pathname absolute-path ;
+
 FROM: io.directories => (directory-entries) ;
 FROM: string => to-folder ;
-: (directory-entries) ( path -- seq )
+: (folder-entries) ( folder -- seq )
     [ pathname ] keep
     [ (directory-entries) ] dip swap
     [ over pathname "/" append
       [ name>> ] dip swap append to-folder
     ] map
-      nip
+    nip
     ;
 
 FROM: io.directories => to-folder ;
 FROM: io.pathnames => pathname ;
-: directory-entries ( path -- seq )
-    [ normalize-path (directory-entries) ] keep
-    [ [ name>> { "." ".." } member? not ] filter ] dip
-    swap [ to-folder ] with map!
+: folder-entries ( folder -- seq )
+    (folder-entries) 
+    [ name>> { "." ".." } member? not ] filter 
+    ! swap [ to-folder ] with map!
 ;
 
-! : directory-files ( path -- seq )
-!     directory-entries [ name>> ] map ;
+: folder-files ( folder -- seq )
+    folder-entries [ name>> ] map ;
 
-: with-directory-entries ( path quot -- )
-    [ [ "" directory-entries ] ] dip compose with-directory ; inline
+: with-folder-entries ( folder quot -- )
+    [ [ "" folder-entries ] ] dip compose with-directory ; inline
 
-: with-directory-files ( path quot -- )
-    [ [ "" directory-files ] ] dip compose with-directory ; inline
+: with-folder-files ( folder quot -- )
+    [ [ "" folder-files ] ] dip compose with-directory ; inline
 
 M: folder-entry pprint* pprint-object ;
 

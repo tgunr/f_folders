@@ -11,15 +11,17 @@ IN: folder.compare
 
 FROM: namespaces => set ;
 SYMBOL: folder-filter
-filter-nothing folder-filter set
+filter-nothing folder-filter set ! default is exclude nothing
 
 TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries ;
 : <folder-compare> ( src dst -- folder.compare )
     folder-compare new
+    [ directory-tree-files ] >>dir-word ! default is deep compare
     folder-filter get
-    dup [ ] [ drop filter-nothing <regexp> ] if >>filter
-    swap >>dst-path
-    swap  >>src-path
+    dup [ ] [ drop filter-nothing <regexp> ]
+        if >>filter
+        swap >>dst-path
+        swap  >>src-path
 ;
 
 ! Accessors
@@ -74,7 +76,7 @@ TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries 
     >>filter 
     ;
 
-: set-deep ( folder.compare t|f -- folder.compare' )
+: set-dir-word ( folder.compare t|f -- folder.compare' )
     [ [ directory-tree-files ] >>dir-word ]
     [ [ directory-files ] >>dir-word ]
     if
@@ -117,14 +119,21 @@ FROM: namespaces => set ;
     src dst dir-word set-folder-pair
     ;
 
-ALIAS: deep t
-ALIAS: shallow f
+: deep ( -- t ) t ;
+: shallow ( -- f ) f ;
 
-: folder.compare-new ( src dst deep? -- folder.compare )
-    [ <folder-compare> ] dip
-    set-deep
+: create-entries ( folder.compare -- folder.compare )
     create-src-entries
-    create-dst-entries
+    create-dst-entries ;
+
+: new-deep-compare ( src dst -- folder.compare )
+    <folder-compare> 
+    deep set-dir-word
+;
+
+: new-shallow-compare ( src dst -- folder.compare )
+    <folder-compare> 
+    shallow set-dir-word
 ;
 
 GENERIC: to-folder-compare ( src dst -- folder.compare )
@@ -167,9 +176,12 @@ M: folder-entry to-folder-compare
     folder-entries union
     ;
 
-: folder-move ( folder.compare -- seq )
+: folder-move ( folder.compare -- seq x )
     ! List of files in SRC not in DST
-    folder-entries diff
+    [ folder-diff ] keep
+    [ src-path>> as-directory swap [ append ] with map ] keep
+    dst-path>> as-directory
+    
     ! List of files in SRC and in DST
     ! List of files in DST not in SRC (prune)
     ;
@@ -216,7 +228,7 @@ CONSTANT: f3 "/Volumes/mphd/Users/davec"
 CONSTANT: f4 "/Users/davec"
 FROM: folder => pathname ;
 : compare-this ( -- x )
-    f3 f4 f folder.compare-new
+    f3 f4 <folder-compare>
     ;
 
 : not-in-dst ( folder.compare -- seq )

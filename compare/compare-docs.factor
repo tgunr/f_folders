@@ -17,12 +17,12 @@ HELP: <folder-compare>
 HELP: folder-compare
 { $var-description "" } ;
 
-HELP: rm
+HELP: folder-rm
 { $description "Using the intersection of two folders will remove files in the destination according to the mode." }
 
 ;
   
-HELP: set-deep
+HELP: set-dir-word
 { $values { "folder.compare" "folder.compare" } { "t|f" boolean } { "folder.compare'" "folder.compare" } }
 { $description "Sets the property for deep or shallow inspection" }
 ;
