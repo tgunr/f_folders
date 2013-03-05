@@ -1,9 +1,14 @@
-! Copyright (C) 2011 PolyMicro Systems.
-! See http://polymicrosystems.com/license for license details.
-!
+! File: folder.factor
+! Version: 0.1
+! DRI: Dave Carlton <davec@polymicro.net>
+! Description: Folder Summary
 ! This vocabulary implements folder entries in a manner similar to directory entries.
 ! The primary difference is a folder entry contains the complete path to the entry
 ! making it easier to work with and manipulate items.
+!
+! Copyright (C) 2011 PolyMicro Systems.
+! See http://polymicrosystems.com/license for license details.
+
 
 USING: accessors ascii checksums checksums.md5 classes.tuple
 combinators continuations io io.backend io.files io.files.info
@@ -134,7 +139,8 @@ IN: folder
 
 TUPLE: folder-entry < directory-entry path ;
 
-: <folder> ( name type path -- folder ) folder-entry boa ;
+: <folder-entry> ( name type path -- folder )
+    normalize-path folder-entry boa ;
 
 ! Accessors
 : «name ( folder.entry -- name folder.entry )
@@ -150,15 +156,18 @@ SYMBOL: +nonexistent-file+
 IN: string
 GENERIC: to-folder ( path -- folder )
 M: string to-folder ( path -- folder )
-    normalize-path
     dup 
     [ file-info type>> ]
     [ nip drop +nonexistent-file+ ]
     recover
     [ last-path-component ] dip
     swap 
-    <folder>
+    <folder-entry>
 ;
+
+IN: folder
+: string-to-folder ( path -- folder )
+    to-folder ;
 
 IN: io.directories
 GENERIC: to-folder ( path directory-entry -- folder )
@@ -175,6 +184,8 @@ M: folder-entry pathname
     [ path>> "/" append ] keep
     name>> append
 ;
+: path+name ( folder-entry -- path )
+    pathname ;
 
 M: folder-entry equal?
     ! 2dup
@@ -215,17 +226,19 @@ FROM: io.pathnames => pathname ;
 : folder-entries ( folder -- seq )
     (folder-entries) 
     [ name>> { "." ".." } member? not ] filter 
-    ! swap [ to-folder ] with map!
 ;
 
-: folder-files ( folder -- seq )
-    folder-entries [ name>> ] map ;
+: folder-filenames ( folder -- seq )
+    folder-entries [ name>> ] map! ;
+
+: with-folder-directory ( folder quot -- )
+     [ pathname ] dip  with-directory ; inline
 
 : with-folder-entries ( folder quot -- )
-    [ [ "" folder-entries ] ] dip compose with-directory ; inline
+     [ folder-entries ] dip each ; inline
 
-: with-folder-files ( folder quot -- )
-    [ [ "" folder-files ] ] dip compose with-directory ; inline
+: with-folder-filenames ( folder quot -- )
+     [ folder-filenames ] dip each ; inline
 
 M: folder-entry pprint* pprint-object ;
 
@@ -279,5 +292,6 @@ FROM: folder => pathname ;
     [ pathname md5 checksum-file ] dip
     pathname md5 checksum-file =
     ;
+
 
 

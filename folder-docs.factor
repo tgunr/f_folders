@@ -47,7 +47,7 @@ HELP: (directory-entries)
 }
 ;
 
-HELP: <folder>
+HELP: <folder-entry>
 { $values
   { "name" string } { "type" { $link "file-types"  } } { "path" string }
     { "folder" folder-entry }
@@ -57,7 +57,7 @@ HELP: <folder>
     "Create a folder-entry for your home Desktop:"
     { $code
         """USING: folder ;
-      "Desktop" +directory+ home <folder>"""
+      "Desktop" +directory+ "/Users/home" <folder-entry>"""
     }
   }
   
