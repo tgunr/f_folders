@@ -14,6 +14,14 @@ HELP: tab?
 { $description "Compares character with tab" }
 ;
 
+HELP: components-to-path 
+{ $values 
+  { "seq" "sequence of path names" } 
+  { "path" "completed path" } 
+}
+{ $description "Given as sequence of path components, will join them together into a complete path" }
+;
+
 HELP: bump-name
 { $values
   { "path" string }
