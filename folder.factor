@@ -13,7 +13,7 @@
 USING: accessors ascii checksums checksums.md5 classes.tuple
 combinators continuations io io.backend io.files io.files.info
 io.files.links kernel libc math math.parser namespaces
-prettyprint.custom sequences splitting strings unix.users ;
+prettyprint.custom sequences splitting strings unix.ffi unix.users ;
 
 IN: io.pathnames
 
@@ -137,10 +137,16 @@ IN: io.pathnames
 
 IN: folder
 
-TUPLE: folder-entry < directory-entry path ;
+TUPLE: folder-entry < directory-entry path owner group permissions acl data ;
 
 : <folder-entry> ( name type path -- folder )
-    normalize-path folder-entry boa ;
+    normalize-path
+    f 
+    f 
+    f
+    f
+    f
+    folder-entry boa ;
 
 ! Accessors
 : «name ( folder.entry -- name folder.entry )
@@ -149,6 +155,7 @@ TUPLE: folder-entry < directory-entry path ;
     [ type>> ] keep ;
 : «path ( folder.entry -- path folder.entry )
     [ path>> ] keep ;
+
 
 IN: io.files.types
 SYMBOL: +nonexistent-file+
@@ -213,7 +220,7 @@ M: folder-entry absolute-path pathname absolute-path ;
 FROM: io.directories => (directory-entries) ;
 FROM: string => to-folder ;
 : (folder-entries) ( folder -- seq )
-    [ pathname ] keep
+B    [ pathname ] keep
     [ (directory-entries) ] dip swap
     [ over pathname "/" append
       [ name>> ] dip swap append to-folder
