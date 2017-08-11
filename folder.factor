@@ -13,7 +13,7 @@
 USING: accessors ascii checksums checksums.md5 classes.tuple
 combinators continuations io io.backend io.files io.files.info
 io.files.links kernel libc math math.parser namespaces
-prettyprint.custom sequences splitting strings unix.ffi unix.users ;
+regexp prettyprint.custom sequences splitting strings unix.ffi unix.users ;
 
 IN: io.pathnames
 
@@ -137,7 +137,7 @@ IN: io.pathnames
 
 IN: folder
 
-TUPLE: folder-entry < directory-entry path owner group permissions acl data ;
+TUPLE: folder-entry < directory-entry path owner group permissions acl data entries ;
 
 : <folder-entry> ( name type path -- folder )
     normalize-path
@@ -146,16 +146,20 @@ TUPLE: folder-entry < directory-entry path owner group permissions acl data ;
     f
     f
     f
+    f
     folder-entry boa ;
 
-! Accessors
+! Accessors (note the « character is option/alt-\
 : «name ( folder.entry -- name folder.entry )
     [ name>> ] keep ;
+: «extension ( folder.entry -- name folder-entry )
+    [ name>> file-extension ] keep ;
 : «type ( folder.entry -- type folder.entry )
     [ type>> ] keep ;
 : «path ( folder.entry -- path folder.entry )
     [ path>> ] keep ;
-
+: «entries ( folder.entry -- entries folder.entry )
+    [ entries>> ] keep ;
 
 IN: io.files.types
 SYMBOL: +nonexistent-file+
@@ -177,7 +181,7 @@ IN: folder
     to-folder ;
 
 IN: io.directories
-GENERIC: to-folder ( path directory-entry -- folder )
+GENERIC: to-folder ( path entry -- folder )
 M: directory-entry to-folder 
     tuple-slots
     swap normalize-path suffix
@@ -219,8 +223,36 @@ M: folder-entry absolute-path pathname absolute-path ;
 
 FROM: io.directories => (directory-entries) ;
 FROM: string => to-folder ;
-: (folder-entries) ( folder -- seq )
-B    [ pathname ] keep
+
+: is-directory? ( entry -- ? )
+    type>> +directory+ = ;
+
+: is-file? ( entry -- ? )
+    type>> +regular-file+ = ;
+
+: is-symbolic? ( entry -- ? )
+    type>> +symbolic-link+ = ;
+
+: is-hidden? ( entry -- ? )
+    name>> first CHAR: . = ;
+
+: name=? ( str entry -- ? )
+    swap name>> =  ;
+
+: name=~? ( regexp entry -- ? )
+    [ name>> ] dip re-contains? ; 
+
+: name-in-seq? ( string-seq entry -- ? )
+    [ name=? ] with find drop ;
+
+: has-entries? ( entry -- ? )
+    entries>> length f = not ;
+
+: wwcd ( -- path )
+    "." normalize-path ;
+
+: (folder-entries) ( folder -- folders )
+    [ pathname ] keep
     [ (directory-entries) ] dip swap
     [ over pathname "/" append
       [ name>> ] dip swap append to-folder
@@ -228,12 +260,31 @@ B    [ pathname ] keep
     nip
     ;
 
+: (folder-entries-deep) ( folder -- folders )
+   (folder-entries)
+    [ ! entry
+            [ is-directory? ] keep ! ? entry
+            [ name>> { "." ".." } member? not ] keep ! ? ? entry 
+            [ and ] dip ! ? entry
+            swap ! entry ?
+            [ ! entry
+                [ pathname to-folder (folder-entries-deep) ] keep ! entries entry
+                swap >>entries
+            ] when ! entry
+    ] map
+   ;
+     
 FROM: io.directories => to-folder ;
 FROM: io.pathnames => pathname ;
 : folder-entries ( folder -- seq )
     (folder-entries) 
     [ name>> { "." ".." } member? not ] filter 
 ;
+
+: folder-entries-deep ( folder -- entries )
+    (folder-entries-deep)
+    [ name>> { "." ".." } member? not ] filter 
+    ;
 
 : folder-filenames ( folder -- seq )
     folder-entries [ name>> ] map! ;
@@ -268,29 +319,8 @@ IN: io.directories
     recover
 ;
 
-: is-directory? ( directory-entry -- ? )
-    type>> +directory+ = ;
-
-: is-file? ( directory-entry -- ? )
-    type>> +regular-file+ = ;
-
-: is-symbolic? ( directory-entry -- ? )
-    type>> +symbolic-link+ = ;
-
-: is-hidden? ( directory-entry -- ? )
-    name>> first CHAR: . = ;
-
-: name=? ( str directory-entry -- ? )
-    swap name>> =  ;
-
-: name-in-seq? ( directory-entry string-seq -- ? )
-    swap [ name=? ] with find drop ;
-
-: wwcd ( -- path )
-    "." normalize-path ;
-
 FROM: folder => pathname ;
-: checksum= ( folder-entry1 folder-entry2 -- ? )
+: checksum= ( entry1 entry2 -- ? )
     "progress" get-global
     [ over pathname  "comparing: " prepend print
       dup pathname  "      with: " prepend print
