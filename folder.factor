@@ -10,10 +10,11 @@
 ! See http://polymicrosystems.com/license for license details.
 
 
-USING: accessors ascii checksums checksums.md5 classes.tuple
-combinators continuations io io.backend io.files io.files.info
-io.files.links kernel libc math math.parser namespaces
-regexp prettyprint.custom sequences splitting strings unix.ffi unix.users ;
+USING: accessors ascii checksums checksums.md5 checksums.sha
+checksums.superfast classes.tuple combinators continuations io
+io.backend io.files io.files.info io.files.links io.files.types kernel
+libc math math.order math.parser namespaces prettyprint.custom regexp
+sequences sorting splitting strings unix.users ;
 
 IN: io.pathnames
 
@@ -135,18 +136,23 @@ IN: io.pathnames
     if-empty
 ;
 
+IN: io.files.types
+
+SYMBOL: +nonexistent-file+
+
 IN: folder
 
-TUPLE: folder-entry < directory-entry path owner group permissions acl data entries ;
+TUPLE: folder-entry < directory-entry path info stamp entries ;
 
-: <folder-entry> ( name type path -- folder )
-    normalize-path
-    f 
-    f 
-    f
-    f
-    f
-    f
+: <folder-entry> ( name info path -- folder )
+    swap normalize-path
+    over ! check for existence
+    [
+        [ dup type>> swap ] dip  swap ! adjust stack: name type path info
+    ] [
+        [ drop +nonexistent-file+ ] dip f
+    ] if
+    f f
     folder-entry boa ;
 
 ! Accessors (note the « character is option/alt-\
@@ -158,39 +164,45 @@ TUPLE: folder-entry < directory-entry path owner group permissions acl data entr
     [ type>> ] keep ;
 : «path ( folder.entry -- path folder.entry )
     [ path>> ] keep ;
+: «info ( folder.entry -- file-info folder.entry )
+    [ info>> ] keep ;
+: «stamp ( folder.entry -- file-info folder.entry )
+    [ info>> ] keep ;
 : «entries ( folder.entry -- entries folder.entry )
     [ entries>> ] keep ;
 
-IN: io.files.types
-SYMBOL: +nonexistent-file+
-
 IN: string
+
 GENERIC: to-folder ( path -- folder )
+
 M: string to-folder ( path -- folder )
-    dup 
-    [ file-info type>> ]
-    [ nip drop +nonexistent-file+ ]
+    dup [ file-info ]
+    [ nip drop f ]
     recover
     [ last-path-component ] dip
-    swap 
     <folder-entry>
 ;
 
 IN: folder
+
 : string-to-folder ( path -- folder )
     to-folder ;
 
 IN: io.directories
+
 GENERIC: to-folder ( path entry -- folder )
+
 M: directory-entry to-folder 
-    tuple-slots
+B    tuple-slots
     swap normalize-path suffix
     folder-entry prefix
     >tuple
 ;
 
 IN: folder
+
 GENERIC: pathname ( folder-entry -- path )
+
 M: folder-entry pathname 
     [ path>> "/" append ] keep
     name>> append
@@ -208,7 +220,10 @@ M: folder-entry equal?
 
 M: folder-entry hashcode*
     ! dup pathname parent-directory write
-    name>> >lower
+    dup stamp>>
+    [ stamp>> ]
+    [ name>> >lower ]
+    if
     ! dup write
     hashcode*
     ! [ name>> ] keep
@@ -223,6 +238,9 @@ M: folder-entry absolute-path pathname absolute-path ;
 
 FROM: io.directories => (directory-entries) ;
 FROM: string => to-folder ;
+
+: does-exist? ( entry -- ? )
+    type>> +nonexistent-file+ ≠ ;
 
 : is-directory? ( entry -- ? )
     type>> +directory+ = ;
@@ -251,40 +269,83 @@ FROM: string => to-folder ;
 : wwcd ( -- path )
     "." normalize-path ;
 
-: (folder-entries) ( folder -- folders )
-    [ pathname ] keep
-    [ (directory-entries) ] dip swap
-    [ over pathname "/" append
-      [ name>> ] dip swap append to-folder
-    ] map
-    nip
+! Default is shallow, will not look into subdirectories
+SYMBOL: deep-folder
+
+: deep ( -- )   t deep-folder set ;
+: ¬deep ( -- )  f deep-folder set ;
+
+: is-dot? ( entry -- ? )
+    name>> { "." ".." } member? ;
+
+: is-dot-dir? ( entry -- entry ? )
+    [ is-directory? ] keep 
+    [ is-dot? ] keep  
+    [ and ] dip 
+    swap
     ;
 
-: (folder-entries-deep) ( folder -- folders )
+: (folder-entries) ( folder -- entries )
+    «type [ +nonexistent-file+ = ] dip  swap
+    [ drop { } ]
+    [
+        [ pathname ] keep
+        [ (directory-entries) ] dip
+        [ [ is-dot-dir? not nip ] filter ] dip
+        swap
+        [ over pathname "/" append
+          [ name>> ] dip swap append to-folder
+        ] map
+        >>entries entries>>
+    ] if
+    ;
+
+! Recurse into folder and get every file stored into entries
+: (folder-entries-deep) ( folder -- entries )
    (folder-entries)
-    [ ! entry
-            [ is-directory? ] keep ! ? entry
-            [ name>> { "." ".." } member? not ] keep ! ? ? entry 
-            [ and ] dip ! ? entry
-            swap ! entry ?
-            [ ! entry
-                [ pathname to-folder (folder-entries-deep) ] keep ! entries entry
+    [
+        dup is-directory?
+        [
+            is-dot-dir? not 
+            [ 
+                [ pathname to-folder (folder-entries-deep) ] keep 
                 swap >>entries
-            ] when ! entry
+            ] when
+        ] when
     ] map
-   ;
-     
+    ;
+
+: (deep-entries) ( entries -- all-entries )
+    { } swap
+    [
+        dup is-directory? [
+            [ is-dot-dir? not ] keep
+            swap
+            [ entries>> (deep-entries)
+              nip append
+            ] 
+            [ dup is-dot? 
+              [ 2drop ]
+              [ drop suffix ]
+              if
+            ] if
+        ]
+        [ suffix ] if
+    ] each
+    ;
+        
 FROM: io.directories => to-folder ;
 FROM: io.pathnames => pathname ;
-: folder-entries ( folder -- seq )
-    (folder-entries) 
-    [ name>> { "." ".." } member? not ] filter 
-;
 
-: folder-entries-deep ( folder -- entries )
-    (folder-entries-deep)
-    [ name>> { "." ".." } member? not ] filter 
-    ;
+: folder-entries ( folder -- entries )
+    deep-folder get
+    [ (folder-entries-deep)
+      (deep-entries)
+    ]
+    [ (folder-entries) ]
+    if
+    [ is-dot? not ] filter 
+;
 
 : folder-filenames ( folder -- seq )
     folder-entries [ name>> ] map! ;
@@ -292,7 +353,7 @@ FROM: io.pathnames => pathname ;
 : with-folder-directory ( folder quot -- )
      [ pathname ] dip  with-directory ; inline
 
-: with-folder-entries ( folder quot -- )
+: with-folder ( folder quot -- )
      [ folder-entries ] dip each ; inline
 
 : with-folder-filenames ( folder quot -- )
@@ -326,9 +387,21 @@ FROM: folder => pathname ;
       dup pathname  "      with: " prepend print
     ]
     [ ] if
-    [ pathname md5 checksum-file ] dip
+    [ pathname sha1 checksum-file ] dip
     pathname md5 checksum-file =
     ;
 
+: !checksum ( entry -- entry )
+    [ pathname superfast B checksum-file ] keep
+    swap >>data ;
+
+: checksum-entries ( entries -- entries )
+    [ !checksum ] map ;
+
+: «checksum ( entry -- hash )
+    stamp>> 0 swap [ + ] each ;
+
+: checksum-sort ( entries -- entries )
+    [ «checksum [ «checksum ] dip  <=> ] sort ;
 
 
