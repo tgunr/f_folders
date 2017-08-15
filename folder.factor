@@ -10,10 +10,12 @@
 ! See http://polymicrosystems.com/license for license details.
 
 
-USING: accessors ascii checksums checksums.md5 checksums.sha
-checksums.superfast classes.tuple combinators continuations io
+USING: accessors ascii checksums checksums.md5 checksums.sha checksums.adler-32
+checksums.bsd checksums.fnv1 checksums.hmac checksums.interleave checksums.md5
+checksums.murmur checksums.ripemd checksums.xxhash checksums.fletcher
+checksums.superfast classes.tuple combinators continuations io io.streams.c
 io.backend io.files io.files.info io.files.links io.files.types kernel
-libc math math.order math.parser namespaces prettyprint.custom regexp
+libc math math.order math.parser namespaces prettyprint prettyprint.custom regexp
 sequences sorting splitting strings unix.users ;
 
 IN: io.pathnames
@@ -206,7 +208,8 @@ GENERIC: pathname ( folder-entry -- path )
 M: folder-entry pathname 
     [ path>> "/" append ] keep
     name>> append
-;
+    ;
+
 : path+name ( folder-entry -- path )
     pathname ;
 
@@ -392,8 +395,8 @@ FROM: folder => pathname ;
     ;
 
 : !checksum ( entry -- entry )
-    [ pathname superfast B checksum-file ] keep
-    swap >>data ;
+    [ pathname fnv1-32 checksum-file ] keep
+    swap >>stamp ;
 
 : checksum-entries ( entries -- entries )
     [ !checksum ] map ;
@@ -404,4 +407,19 @@ FROM: folder => pathname ;
 : checksum-sort ( entries -- entries )
     [ «checksum [ «checksum ] dip  <=> ] sort ;
 
+: spotcheck-entry ( entry -- entry )
+    dup
+    pathname "r" fopen >>stamp
+    B{ }
+    [ over stamp>> fgetc
+      f over ≠ swap
+      over [ rot swap suffix
+             [ dup stamp>> 100000 1 rot fseek ] 2dip swap
+           ]
+      [ drop ] if
+    ] loop
+    adler-32 checksum-bytes
+    over stamp>> fclose
+    >>stamp ;
 
+      
