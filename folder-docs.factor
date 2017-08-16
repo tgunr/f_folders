@@ -64,12 +64,11 @@ HELP: <folder-entry>
 { $examples
     "Create a folder-entry for your home Desktop:"
     { $code
-        """USING: folder ;
-      "Desktop" +directory+ "/Users/home" <folder-entry>"""
+      "USING: folder ;"
+      "\"Desktop\" +directory+ \"/Users/home\" <folder-entry>"
     }
   }
-  
-  ;
+;
 
 HELP: directory-entries
 { $values

@@ -166,6 +166,8 @@ TUPLE: folder-entry < directory-entry path info stamp entries ;
     [ type>> ] keep ;
 : «path ( folder.entry -- path folder.entry )
     [ path>> ] keep ;
+: «pathname ( folder.entry -- pathname folder.entry )
+    «path «name [ "/" append ]  2dip  [ append ] dip ; 
 : «info ( folder.entry -- file-info folder.entry )
     [ info>> ] keep ;
 : «stamp ( folder.entry -- file-info folder.entry )
@@ -261,7 +263,7 @@ FROM: string => to-folder ;
     swap name>> =  ;
 
 : name=~? ( regexp entry -- ? )
-    [ name>> ] dip re-contains? ; 
+    name>> swap re-contains? ; 
 
 : name-in-seq? ( string-seq entry -- ? )
     [ name=? ] with find drop ;
@@ -421,5 +423,6 @@ FROM: folder => pathname ;
     adler-32 checksum-bytes
     over stamp>> fclose
     >>stamp ;
+
 
       
