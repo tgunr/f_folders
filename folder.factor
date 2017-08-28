@@ -10,13 +10,12 @@
 ! See http://polymicrosystems.com/license for license details.
 
 
-USING: accessors ascii checksums checksums.md5 checksums.sha checksums.adler-32
-checksums.bsd checksums.fnv1 checksums.hmac checksums.interleave checksums.md5
-checksums.murmur checksums.ripemd checksums.xxhash checksums.fletcher
-checksums.superfast classes.tuple combinators continuations io io.streams.c
-io.backend io.files io.files.info io.files.links io.files.types kernel
-libc math math.order math.parser namespaces prettyprint prettyprint.custom regexp
-sequences sorting splitting strings unix.users ;
+USING: accessors ascii checksums checksums.adler-32 checksums.fnv1
+checksums.md5 checksums.sha classes.tuple combinators continuations
+file.xattr io io.backend io.files io.files.info io.files.links
+io.streams.c kernel libc math math.order math.parser namespaces
+prettyprint.custom regexp sequences sorting splitting strings
+prettyprint unix.users ;
 
 IN: io.pathnames
 
@@ -144,105 +143,24 @@ SYMBOL: +nonexistent-file+
 
 IN: folder
 
-TUPLE: folder-entry < directory-entry path info stamp entries ;
+CONSTANT: TEST "~/test"
+CONSTANT: DOMAIN-ID "net.polymicro."
+    
+TUPLE: folder-entry < directory-entry path info attributes entries fingerprint ;
 
-: <folder-entry> ( name info path -- folder )
-    swap normalize-path
+: (folder-entry) ( name info path -- name type path info attributes entries fingerprint )
+        swap normalize-path
     over ! check for existence
     [
         [ dup type>> swap ] dip  swap ! adjust stack: name type path info
     ] [
         [ drop +nonexistent-file+ ] dip f
     ] if
-    f f
-    folder-entry boa ;
-
-! Accessors (note the « character is option/alt-\
-: «name ( folder.entry -- name folder.entry )
-    [ name>> ] keep ;
-: «extension ( folder.entry -- name folder-entry )
-    [ name>> file-extension ] keep ;
-: «type ( folder.entry -- type folder.entry )
-    [ type>> ] keep ;
-: «path ( folder.entry -- path folder.entry )
-    [ path>> ] keep ;
-: «pathname ( folder.entry -- pathname folder.entry )
-    «path «name [ "/" append ]  2dip  [ append ] dip ; 
-: «info ( folder.entry -- file-info folder.entry )
-    [ info>> ] keep ;
-: «stamp ( folder.entry -- file-info folder.entry )
-    [ info>> ] keep ;
-: «entries ( folder.entry -- entries folder.entry )
-    [ entries>> ] keep ;
-
-IN: string
-
-GENERIC: to-folder ( path -- folder )
-
-M: string to-folder ( path -- folder )
-    dup [ file-info ]
-    [ nip drop f ]
-    recover
-    [ last-path-component ] dip
-    <folder-entry>
-;
-
-IN: folder
-
-: string-to-folder ( path -- folder )
-    to-folder ;
-
-IN: io.directories
-
-GENERIC: to-folder ( path entry -- folder )
-
-M: directory-entry to-folder 
-B    tuple-slots
-    swap normalize-path suffix
-    folder-entry prefix
-    >tuple
-;
-
-IN: folder
-
-GENERIC: pathname ( folder-entry -- path )
-
-M: folder-entry pathname 
-    [ path>> "/" append ] keep
-    name>> append
+    f f f ! attributes, entries and fingerprint are f until needed
     ;
 
-: path+name ( folder-entry -- path )
-    pathname ;
-
-M: folder-entry equal?
-    ! 2dup
-    [ name>> ] bi@
-    ! over 5 head "Larry" =
-    ! [ break "HERE" drop 2swap 2drop ]
-    ! [ 2swap 2drop ] if
-    = ;
-
-M: folder-entry hashcode*
-    ! dup pathname parent-directory write
-    dup stamp>>
-    [ stamp>> ]
-    [ name>> >lower ]
-    if
-    ! dup write
-    hashcode*
-    ! [ name>> ] keep
-    ! swap string-hashcode
-    ! break
-    ! [ ] [ name>> dup rehash-string string-hashcode ] ?if
-    ! ": " write dup . 
-    ;
-
-FROM: io.pathnames => absolute-path ;
-M: folder-entry absolute-path pathname absolute-path ;
-
-FROM: io.directories => (directory-entries) ;
-FROM: string => to-folder ;
+ : <folder-entry> ( name info path -- folder )
+     (folder-entry) folder-entry boa ;
 
 : does-exist? ( entry -- ? )
     type>> +nonexistent-file+ ≠ ;
@@ -289,6 +207,165 @@ SYMBOL: deep-folder
     [ and ] dip 
     swap
     ;
+
+    ! Accessors (note the « character is option/alt-\
+: «name ( folder.entry -- name folder.entry )
+    [ name>> ] keep ;
+: «extension ( folder.entry -- name folder-entry )
+    [ name>> file-extension ] keep ;
+: «type ( folder.entry -- type folder.entry )
+    [ type>> ] keep ;
+: «path ( folder.entry -- path folder.entry )
+    [ path>> ] keep ;
+: «pathname ( folder.entry -- pathname folder.entry )
+    «path «name [ "/" append ]  2dip  [ append ] dip ; 
+: «info ( folder.entry -- file-info folder.entry )
+    [ info>> ] keep ;
+: attributes» ( folder.entry -- attributes )
+    dup does-exist? [
+        [ attributes>> ] keep
+        swap
+        [ attributes>> ]
+        [ «pathname  swap get-xattrs
+           [ >>attributes ] keep
+           nip
+        ] if
+    ]
+    [ drop f ]
+    if
+    ;
+: «attributes ( folder.entry -- file-info folder.entry )
+    [ attributes» ] keep ;
+
+: «entries ( folder.entry -- entries folder.entry )
+    [ entries>> ] keep ;
+
+IN: string
+
+GENERIC: to-folder ( path -- folder )
+
+M: string to-folder ( path -- folder )
+    dup [ file-info ]
+    [ nip drop f ]
+    recover
+    [ last-path-component ] dip
+    <folder-entry>
+;
+
+IN: folder
+
+: string-to-folder ( path -- folder )
+    to-folder ;
+
+IN: io.directories
+
+GENERIC: to-folder ( path entry -- folder )
+
+M: directory-entry to-folder 
+B    tuple-slots
+    swap normalize-path suffix
+    folder-entry prefix
+    >tuple
+;
+
+IN: folder
+
+GENERIC: pathname ( folder-entry -- path )
+
+M: folder-entry pathname 
+    [ path>> "/" append ] keep
+    name>> append
+    ;
+
+: !fingerprint ( entry -- entry )
+    [ pathname fnv1-32 checksum-file ] keep
+    swap >>fingerprint ;
+
+M: folder-entry equal?
+    ! 2dup
+    [ name>> ] bi@
+    ! over 5 head "Larry" =
+    ! [ break "HERE" drop 2swap 2drop ]
+    ! [ 2swap 2drop ] if
+    = ;
+
+M: folder-entry hashcode*
+    ! dup pathname parent-directory write
+    dup attributes>>
+    [ attributes>> ]
+    [ name>> >lower ]
+    if
+    ! dup write
+    hashcode*
+    ! [ name>> ] keep
+    ! swap string-hashcode
+    ! break
+    ! [ ] [ name>> dup rehash-string string-hashcode ] ?if
+    ! ": " write dup . 
+    ;
+
+FROM: folder => pathname ;
+: fingerprint= ( entry1 entry2 -- ? )
+    "progress" get-global
+    [ over pathname  "comparing: " prepend print
+      dup pathname  "      with: " prepend print
+    ]
+    [ ] if
+    [ pathname sha1 checksum-file ] dip
+    pathname md5 checksum-file =
+    ;
+
+: set-fingerprint-xattr ( fingerprint entry -- )
+    "net.polymicro." "checksum.fnv1-32 " append
+    rot number>string append
+    " " append
+    [ pathname ] dip prepend
+    "xattr -w " prepend
+    dup print 
+    system .
+;
+
+: store-fingerprint ( entry -- entry )
+    dup fingerprint>>
+    [ fingerprint>> ]
+    [ «pathname
+       "net.polymicro." "checksum.fnv1-32 " append
+       [ fingerprint>> ] dip
+       append
+       "xattr -w " prepend system drop
+    ]
+    if
+;
+
+: fingerprint-entries ( entries -- entries )
+    [ !fingerprint ] map ;
+
+: «fingerprint ( entry -- hash )
+    fingerprint>> 0 swap [ + ] each ;
+
+: fingerprint-sort ( entries -- entries )
+    [ «fingerprint [ «fingerprint ] dip  <=> ] sort ;
+
+: spotcheck-entry ( entry -- entry )
+    dup
+    pathname "r" fopen >>fingerprint
+    B{ }
+    [ over fingerprint>> fgetc
+      f over ≠ swap
+      over [ rot swap suffix
+             [ dup fingerprint>> 100000 1 rot fseek ] 2dip swap
+           ]
+      [ drop ] if
+    ] loop
+    adler-32 checksum-bytes
+    over fingerprint>> fclose
+    >>fingerprint ;
+
+FROM: io.pathnames => absolute-path ;
+M: folder-entry absolute-path pathname absolute-path ;
+
+FROM: io.directories => (directory-entries) ;
+FROM: string => to-folder ;
 
 : (folder-entries) ( folder -- entries )
     «type [ +nonexistent-file+ = ] dip  swap
@@ -385,44 +462,3 @@ IN: io.directories
     recover
 ;
 
-FROM: folder => pathname ;
-: checksum= ( entry1 entry2 -- ? )
-    "progress" get-global
-    [ over pathname  "comparing: " prepend print
-      dup pathname  "      with: " prepend print
-    ]
-    [ ] if
-    [ pathname sha1 checksum-file ] dip
-    pathname md5 checksum-file =
-    ;
-
-: !checksum ( entry -- entry )
-    [ pathname fnv1-32 checksum-file ] keep
-    swap >>stamp ;
-
-: checksum-entries ( entries -- entries )
-    [ !checksum ] map ;
-
-: «checksum ( entry -- hash )
-    stamp>> 0 swap [ + ] each ;
-
-: checksum-sort ( entries -- entries )
-    [ «checksum [ «checksum ] dip  <=> ] sort ;
-
-: spotcheck-entry ( entry -- entry )
-    dup
-    pathname "r" fopen >>stamp
-    B{ }
-    [ over stamp>> fgetc
-      f over ≠ swap
-      over [ rot swap suffix
-             [ dup stamp>> 100000 1 rot fseek ] 2dip swap
-           ]
-      [ drop ] if
-    ] loop
-    adler-32 checksum-bytes
-    over stamp>> fclose
-    >>stamp ;
-
-
-      

@@ -5,10 +5,11 @@
 ! Copyright (C) 2017 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
 
-USING: accessors assocs binary-search checksums checksums.fnv1
-checksums.sha debugger folder io io.directories io.pathnames
-kernel math math.order namespaces prettyprint regexp sequences
-sequences.extras splitting string threads ;
+USING: accessors assocs checksums checksums.adler-32 checksums.fnv1
+checksums.md5 checksums.sha folder folder.ext io io.directories io.pathnames
+io.streams.c kernel math math.order namespaces regexp sequences
+sequences.extras sorting splitting threads ;
+
 FROM: string => to-folder ;
 FROM: folder => pathname ;
 IN: folder.duplicates
@@ -84,7 +85,7 @@ SYMBOL: hold
     deep folder-entries
     [ !checksum
       dup name>> print
-      dup stamp>>
+      dup fingerprint>>
       yield
     ] map>alist
     [ second ] collect-by
@@ -98,17 +99,17 @@ SYMBOL: hold
 : shasum-dups ( dups -- shasumdups )
     "Checking full sha:" print
     [ ! V{ array array }
-        [ ! { entry stamp }
+        [ ! { entry fingerprint }
             first ! entry
             dup pathname
             dup print yield
-            sha1 checksum-file ! entry stamp
-            >>stamp ! entry
-            [ stamp>> ] keep ! stamp entry
-            [ { } ] 2dip ! { } stamp entry
-            swap ! entry stamp
-            [ suffix ] dip ! { entry } stamp }
-            suffix ! { entry stamp }
+            sha1 checksum-file ! entry fingerprint
+            >>fingerprint ! entry
+            [ fingerprint>> ] keep ! fingerprint entry
+            [ { } ] 2dip ! { } fingerprint entry
+            swap ! entry fingerprint
+            [ suffix ] dip ! { entry } fingerprint }
+            suffix ! { entry fingerprint }
         ] map
     ] map
     ;
@@ -125,8 +126,8 @@ SYMBOL: hold
     "Deleting duplicates" print
     [ 1 tail
       [ first «name [ print ] dip
-«pathname [ delete-file ] dip
-        stamp>> hold get delete-at
+        «pathname [ delete-file ] dip
+        fingerprint>> hold get delete-at
       ] each
     ] each ;
 
