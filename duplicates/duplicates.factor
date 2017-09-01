@@ -8,7 +8,7 @@
 USING: accessors assocs checksums checksums.adler-32 checksums.fnv1
 checksums.md5 checksums.sha folder folder.ext io io.directories io.pathnames
 io.streams.c kernel math math.order namespaces regexp sequences
-sequences.extras sorting splitting threads ;
+words sequences.extras sorting splitting threads ;
 
 FROM: string => to-folder ;
 FROM: folder => pathname ;
@@ -47,7 +47,7 @@ CONSTANT: CHECK-FOLDER "/Volumes/alpha_music"
     [ R/ .*_1\..*/ swap first find-in-name ] filter ;
 
 : filter-dot-names ( seq:{array} -- seq:{array} )
-    [ first R/ \._.*/ swap name=~? not ] filter ;
+    [ R/ ^\..*/ swap name=~? not ] filter ;
 
 SYMBOL: hold
 
@@ -62,7 +62,7 @@ SYMBOL: hold
 : get-entries ( -- )
     CHECK-FOLDER to-folder
     folder-entries
-    checksum-entries
+    fingerprint-entries
     hold set
     ;
 
@@ -79,16 +79,20 @@ SYMBOL: hold
     [ second ] collect-by
     ;
 
+: filter-entries ( entries -- entries )
+    filter-dot-names
+    ;
+
 : get-files ( path -- )
     to-folder
     "Collecting files:" print
     deep folder-entries
-    [ !checksum
-      dup name>> print
-      dup fingerprint>>
+    filter-entries 
+    [ dup name>> HERE.
+      fingerprintGet
       yield
     ] map>alist
-    [ second ] collect-by
+    [ first ] collect-by
     hold set
     ;
 
@@ -122,16 +126,16 @@ SYMBOL: hold
     values
     ;
 
-: delete-dups ( dups -- )
+: delete-dups ( dups x -- x )
     "Deleting duplicates" print
     [ 1 tail
-      [ first «name [ print ] dip
-        «pathname [ delete-file ] dip
-        fingerprint>> hold get delete-at
+      [ first nameGet [ print ] dip
+        pathname [ delete-file ] dip
+        fingerprintGet hold get delete-at
       ] each
     ] each ;
 
-: x ( path -- )
+: x ( path x -- x )
     hold get
     [ get-files ] [ drop ] if 
     hold get
