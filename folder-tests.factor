@@ -18,8 +18,13 @@ SYMBOL: testfolder
     testfolder set
     ;
 
+[ t ] [ 32 space? ] unit-test
+[ f ] [ 33 space? ] unit-test
+[ t ] [ 9 tab? ] unit-test
+[ f ] [ 10 tab? ] unit-test
 [ t ] [ "   test   " trim-whitespace "test" = ] unit-test
 [ t ] [ [ "~" "factor" ] components-to-path "~/factor" = ] unit-test
+[ t ] [ "test" quote-string "\"test\"" = ] unit-test 
 [ t ] [ "directory" as-directory "directory/" = ] unit-test
 [ t ] [ "directory/" as-directory "directory/" = ] unit-test
 [ t ] [ "directory" as-file "directory" = ] unit-test

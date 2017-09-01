@@ -10,12 +10,11 @@
 ! See http://polymicrosystems.com/license for license details.
 
 
-USING: accessors ascii checksums checksums.adler-32 checksums.fnv1
-checksums.md5 checksums.sha classes.tuple combinators continuations
-file.xattr io io.backend io.files io.files.info io.files.links
-io.streams.c kernel libc math math.order math.parser namespaces
-prettyprint.custom regexp sequences sorting splitting strings
-prettyprint unix.users ;
+USING: accessors checksums checksums.adler-32 checksums.fnv1
+classes.tuple combinators continuations file.xattr io io.backend
+io.files io.files.info io.files.links io.streams.c kernel libc locals
+math math.order math.parser namespaces prettyprint prettyprint.custom
+words regexp sequences sorting splitting strings unix.users ;
 
 IN: io.pathnames
 
@@ -30,6 +29,9 @@ IN: io.pathnames
 : components-to-path ( seq -- path )
     "/" join
     ;
+
+: quote-string ( string -- string' )
+    "\"" dup surround ;
 
 : as-directory ( path -- path' )
     [ last CHAR: / = ] keep
@@ -143,12 +145,14 @@ SYMBOL: +nonexistent-file+
 
 IN: folder
 
+CONSTANT: BUNDLEID "net.polymicro."
+
 CONSTANT: TEST "~/test"
 CONSTANT: DOMAIN-ID "net.polymicro."
     
-TUPLE: folder-entry < directory-entry path info attributes entries fingerprint ;
+TUPLE: folder-entry < directory-entry path info xattrs entries fingerprint ;
 
-: (folder-entry) ( name info path -- name type path info attributes entries fingerprint )
+: (folder-entry) ( name info path -- name type path info xattrs entries fingerprint )
         swap normalize-path
     over ! check for existence
     [
@@ -156,12 +160,113 @@ TUPLE: folder-entry < directory-entry path info attributes entries fingerprint ;
     ] [
         [ drop +nonexistent-file+ ] dip f
     ] if
-    f f f ! attributes, entries and fingerprint are f until needed
+    f f f ! xattrs, entries and fingerprint are f until needed
     ;
 
  : <folder-entry> ( name info path -- folder )
-     (folder-entry) folder-entry boa ;
+     (folder-entry) folder-entry boa
+     ;
+    
+! Accessors
+: nameRead ( entry -- name )   name>> ;
+: pathRead ( entry -- path )   path>> ;
+: pathnameRead ( entry -- path )
+    [ pathRead ] keep  [ "/" append ] dip  nameRead append ; 
+: typeRead ( entry -- type )   type>> ; 
+    : infoRead ( entry -- info )   info>> ;
+    DEFER: does-exist?
+    DEFER: pathnameGet
+: (xattrs@) ( entry -- xattrs )
+    dup does-exist? [
+        [ xattrs>> ] keep
+        swap empty?
+        [ pathnameGet
+          swap get-xattrs
+          [ >>xattrs ] keep
+          nip
+        ]
+        [ xattrs>> ]
+        if
+    ]
+    [ drop f ]
+    if
+    ;
+: xattrsRead ( entry -- xattrs )   (xattrs@) ;
+: entriesRead ( entry -- entries )   entries>> ;
 
+: nameWrite ( name entry -- )   name<< ;
+: typeWrite ( type entry -- )   type<< ; 
+: infoWrite ( info entry -- )   info<< ; 
+: xattrsWrite ( xattrs entry -- )   xattrs<< ;
+: fingerprintWrite ( fingerprint entry -- )   fingerprint<< ;
+
+: nameGet ( entry -- name entry )
+    [ name>> ] keep ;
+: extensionGet ( entry -- extension entry )
+    [ name>> file-extension ] keep ;
+: typeGet ( entry -- type entry )
+    [ type>> ] keep ;
+: pathGet ( entry -- path entry )
+    [ path>> ] keep ;
+: pathnameGet ( entry -- pathname entry )
+    [ pathnameRead ] keep ;
+: infoGet ( entry -- file-info entry )
+    [ info>> ] keep ;
+: xattrsGet ( entry -- xattrs entry )
+    [ xattrsRead ] keep ;
+: entriesGet ( entry -- entries entry )
+    [ entries>> ] keep ;
+DEFER: fingerprintRead
+: fingerprintGet ( entry -- fingerprint entry )
+    [ fingerprintRead ] keep ;
+
+: fingerprint? ( entry -- ? )
+    fingerprintRead >boolean ;
+         
+: fingerprintKey@ ( -- key )
+    BUNDLEID "checksum.fnv1-32" append ;
+
+:: fingerprint-xattrStore ( fingerprint entry -- )
+    entry pathnameRead  
+    fingerprintKey@  entry fingerprintRead  <xattr>
+    xattrStore
+    entry xattrsRead drop ; 
+
+:: fingerprint-xattrGet ( entry -- fingerprint )
+    f :> fp!
+    entry xattrsRead  ! list of xattrs
+    [ entry xattrsRead
+      [ name>> fingerprintKey@ = ] filter :> {xattrs} 
+      {xattrs} empty? not
+      [ {xattrs} first  value>> fp!
+        fp entry fingerprintWrite
+      ] when
+    ] when
+    fp
+!    dup HERE.
+    ;
+
+:: fingerprint-xattrSet ( entry -- entry )
+    entry pathnameRead fnv1-32 checksum-file :> fp
+    fp entry  [ fingerprintWrite ] [ fingerprint-xattrStore ] 2bi
+    entry
+!    fp HERE.
+    ;
+
+:: fingerprintRead ( entry -- fingerprint )  ! Read fingerprint
+    entry fingerprint>> :> fp!
+    fp
+    [ entry fingerprint-xattrGet fp!  ! look in xattrs
+      fp
+      [ entry fingerprint-xattrSet fingerprint>> fp! ]  ! not found, go create
+      unless
+    ]
+    unless
+    fp
+ !   fp HERE.
+    ;
+
+   
 : does-exist? ( entry -- ? )
     type>> +nonexistent-file+ ≠ ;
 
@@ -196,7 +301,7 @@ TUPLE: folder-entry < directory-entry path info attributes entries fingerprint ;
 SYMBOL: deep-folder
 
 : deep ( -- )   t deep-folder set ;
-: ¬deep ( -- )  f deep-folder set ;
+: notdeep ( -- )  f deep-folder set ;
 
 : is-dot? ( entry -- ? )
     name>> { "." ".." } member? ;
@@ -207,38 +312,6 @@ SYMBOL: deep-folder
     [ and ] dip 
     swap
     ;
-
-    ! Accessors (note the « character is option/alt-\
-: «name ( folder.entry -- name folder.entry )
-    [ name>> ] keep ;
-: «extension ( folder.entry -- name folder-entry )
-    [ name>> file-extension ] keep ;
-: «type ( folder.entry -- type folder.entry )
-    [ type>> ] keep ;
-: «path ( folder.entry -- path folder.entry )
-    [ path>> ] keep ;
-: «pathname ( folder.entry -- pathname folder.entry )
-    «path «name [ "/" append ]  2dip  [ append ] dip ; 
-: «info ( folder.entry -- file-info folder.entry )
-    [ info>> ] keep ;
-: attributes» ( folder.entry -- attributes )
-    dup does-exist? [
-        [ attributes>> ] keep
-        swap
-        [ attributes>> ]
-        [ «pathname  swap get-xattrs
-           [ >>attributes ] keep
-           nip
-        ] if
-    ]
-    [ drop f ]
-    if
-    ;
-: «attributes ( folder.entry -- file-info folder.entry )
-    [ attributes» ] keep ;
-
-: «entries ( folder.entry -- entries folder.entry )
-    [ entries>> ] keep ;
 
 IN: string
 
@@ -262,7 +335,7 @@ IN: io.directories
 GENERIC: to-folder ( path entry -- folder )
 
 M: directory-entry to-folder 
-B    tuple-slots
+    tuple-slots
     swap normalize-path suffix
     folder-entry prefix
     >tuple
@@ -272,79 +345,20 @@ IN: folder
 
 GENERIC: pathname ( folder-entry -- path )
 
-M: folder-entry pathname 
-    [ path>> "/" append ] keep
-    name>> append
-    ;
-
-: !fingerprint ( entry -- entry )
-    [ pathname fnv1-32 checksum-file ] keep
-    swap >>fingerprint ;
+M: folder-entry pathname
+    pathnameRead ; 
 
 M: folder-entry equal?
-    ! 2dup
-    [ name>> ] bi@
-    ! over 5 head "Larry" =
-    ! [ break "HERE" drop 2swap 2drop ]
-    ! [ 2swap 2drop ] if
-    = ;
+    [ fingerprintRead ] bi@ = ;
 
 M: folder-entry hashcode*
-    ! dup pathname parent-directory write
-    dup attributes>>
-    [ attributes>> ]
-    [ name>> >lower ]
-    if
-    ! dup write
-    hashcode*
-    ! [ name>> ] keep
-    ! swap string-hashcode
-    ! break
-    ! [ ] [ name>> dup rehash-string string-hashcode ] ?if
-    ! ": " write dup . 
-    ;
-
-FROM: folder => pathname ;
-: fingerprint= ( entry1 entry2 -- ? )
-    "progress" get-global
-    [ over pathname  "comparing: " prepend print
-      dup pathname  "      with: " prepend print
-    ]
-    [ ] if
-    [ pathname sha1 checksum-file ] dip
-    pathname md5 checksum-file =
-    ;
-
-: set-fingerprint-xattr ( fingerprint entry -- )
-    "net.polymicro." "checksum.fnv1-32 " append
-    rot number>string append
-    " " append
-    [ pathname ] dip prepend
-    "xattr -w " prepend
-    dup print 
-    system .
-;
-
-: store-fingerprint ( entry -- entry )
-    dup fingerprint>>
-    [ fingerprint>> ]
-    [ «pathname
-       "net.polymicro." "checksum.fnv1-32 " append
-       [ fingerprint>> ] dip
-       append
-       "xattr -w " prepend system drop
-    ]
-    if
-;
+    nip fingerprintRead ;
 
 : fingerprint-entries ( entries -- entries )
-    [ !fingerprint ] map ;
-
-: «fingerprint ( entry -- hash )
-    fingerprint>> 0 swap [ + ] each ;
+    [ fingerprintGet nip ] map ;
 
 : fingerprint-sort ( entries -- entries )
-    [ «fingerprint [ «fingerprint ] dip  <=> ] sort ;
+    [ fingerprintRead [ fingerprintRead ] dip  <=> ] sort ;
 
 : spotcheck-entry ( entry -- entry )
     dup
@@ -368,7 +382,7 @@ FROM: io.directories => (directory-entries) ;
 FROM: string => to-folder ;
 
 : (folder-entries) ( folder -- entries )
-    «type [ +nonexistent-file+ = ] dip  swap
+    typeGet [ +nonexistent-file+ = ] dip  swap
     [ drop { } ]
     [
         [ pathname ] keep
