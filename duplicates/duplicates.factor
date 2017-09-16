@@ -6,7 +6,7 @@
 ! See http://factorcode.org/license.txt for BSD license.
 
 USING: accessors assocs checksums checksums.sha folder io
-io.directories io.files.links io.pathnames kernel layouts locals
+continuations io.directories io.files.links io.pathnames kernel layouts locals
 math namespaces prettyprint regexp sequences sequences.extras
 serialize splitting threads words unix.ffi ;
 
@@ -51,7 +51,7 @@ CONSTANT: CHECK-FOLDER "/Volumes/alpha_music"
 
 SYMBOL: collection
 SYMBOL: duplicates
-
+SYMBOL: errors  errors [ { } ] initialize
 : which-to-delete? ( entry entry -- entry )
     { } 2sequence dup
     [ R/ .*_1\..*/ find-in-name ] filter 
@@ -139,8 +139,10 @@ CONSTANT: COLLECTION-SAVE "/tmp/collection.fstore"
     pathnameRead duplicates get delete-at ;
 
 : delete-entry ( entry -- )
-    [ pathname delete-file ] keep
-    remove-entry 
+    [ [ pathname delete-file ] keep
+      remove-entry ]
+    [ error>string print  drop ]
+    recover
 ;
 
 : delete-dups ( dups -- )

@@ -1,5 +1,5 @@
 ! File: folder.factor
-! Version: 0.1
+! Version: 0.2
 ! DRI: Dave Carlton <davec@polymicro.net>
 ! Description: Folder Summary
 ! This vocabulary implements folder entries in a manner similar to directory entries.
@@ -355,6 +355,14 @@ M: folder-entry equal?
 M: folder-entry hashcode*
     nip fingerprintRead ;
 
+: error>string ( error -- string )
+    "ERROR: "
+    over args>> first append
+    " error: " append  over errno>> number>string append
+    " msg: " append  over message>> append
+    " word: " append  swap  word>> name>> append
+;
+      
 : fingerprint-entries ( entries -- entries )
     [ fingerprintGet nip ] map ;
 
