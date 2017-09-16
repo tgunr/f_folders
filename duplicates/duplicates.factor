@@ -5,10 +5,10 @@
 ! Copyright (C) 2017 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
 
-USING: accessors assocs checksums checksums.adler-32 checksums.fnv1
-checksums.md5 checksums.sha folder folder.ext io io.directories io.pathnames
-io.streams.c kernel math math.order namespaces regexp sequences
-words sequences.extras sorting splitting threads ;
+USING: accessors assocs checksums checksums.sha folder io
+io.directories io.files.links io.pathnames kernel layouts locals
+math namespaces prettyprint regexp sequences sequences.extras
+splitting threads words unix.ffi ;
 
 FROM: string => to-folder ;
 FROM: folder => pathname ;
@@ -49,7 +49,8 @@ CONSTANT: CHECK-FOLDER "/Volumes/alpha_music"
 : filter-dot-names ( seq:{array} -- seq:{array} )
     [ R/ ^\..*/ swap name=~? not ] filter ;
 
-SYMBOL: hold
+SYMBOL: collection
+SYMBOL: duplicates
 
 : which-to-delete? ( entry entry -- entry )
     { } 2sequence dup
@@ -63,19 +64,19 @@ SYMBOL: hold
     CHECK-FOLDER to-folder
     folder-entries
     fingerprint-entries
-    hold set
+    collection set
     ;
 
 : get-collection ( -- seq )
-    hold get [
+    collection get [
         CHECK-FOLDER qualified-directory-files
         "Collecting files:" print
         [ dup file-name print
           sha1 checksum-file
           yield ] map-zip 
-        hold set
+        collection set
     ] unless
-    hold get
+    collection get
     [ second ] collect-by
     ;
 
@@ -83,7 +84,7 @@ SYMBOL: hold
     filter-dot-names
     ;
 
-: get-files ( path -- )
+: collect-files ( path -- )
     to-folder
     "Collecting files:" print
     deep folder-entries
@@ -93,12 +94,8 @@ SYMBOL: hold
       yield
     ] map>alist
     [ first ] collect-by
-    hold set
+    collection set
     ;
-
-: flatten-dups ( dups -- dupseq )
-    { } swap
-    [ [ suffix ] each ] each ;
 
 : shasum-dups ( dups -- shasumdups )
     "Checking full sha:" print
@@ -118,31 +115,116 @@ SYMBOL: hold
     ] map
     ;
 
-: get-dups ( entries -- dups )
+: collection-dups ( -- {dups} )
     ! any element with 2 or more items is possible dup
+    collection get
     [ nip
       length 2 >=
     ] assoc-filter
     values
     ;
 
-: delete-dups ( dups x -- x )
-    "Deleting duplicates" print
-    [ 1 tail
-      [ first nameGet [ print ] dip
-        pathname [ delete-file ] dip
-        fingerprintGet hold get delete-at
-      ] each
-    ] each ;
+: name. ( entry -- entry )
+    [ nameRead print ] keep ;
 
-: x ( path x -- x )
-    hold get
-    [ get-files ] [ drop ] if 
-    hold get
-    get-dups
-!    shasum-dups
-!    flatten-dups
-!   [ second ] collect-by values
-    delete-dups
+: remove-entry ( entry -- )
+    HERE.S
+    pathnameRead duplicates get delete-at ;
+
+: delete-entry ( entry -- )
+    [ pathname delete-file ] keep
+    remove-entry 
+;
+
+: delete-dups ( dups -- )
+    HERE.S
+    [ name. delete-entry ] each ;
+
+: dups-in-same-folder ( array -- dups )
+    [ length 2 >= ] filter
+    [
+        [ second  [ fingerprintRead ] keep ]
+        map>alist
+        [ first ] collect-by values
+        [ length 2 >= ] filter 
+    ] map B
+    ;
+
+: collect-same-folder ( dups -- seq )
+    [ second [ path>> ] keep ] map>alist
+    [ first ] collect-by  values
+    dups-in-same-folder
+    ;
+
+: shortest-name ( seq -- index )
+    [let most-positive-fixnum :> len!  f :> result!  0 :> index! 
+    [ index!
+          nameRead length :> thisLen
+          thisLen len <
+          [ thisLen len!  index result! ] when
+    ] each-index
+    result ] ;
+
+: .dupFolder ( folder -- )
+    "Deleting duplicates in folder: " pprint
+    pathRead print ;
+
+: collection-folders ( -- )
+    { }  collection get values
+    [ [ second suffix ] each ] each
+    [ pathnameRead ] collect-by 
+    duplicates set ;
+
+: duplicates-fingerprint ( -- seq )
+    { }  duplicates get values
+    [ [ suffix ] each ] each
+    [ fingerprintRead ] collect-by 
+    ;
+
+: symlink-dups ( -- )
+    duplicates-fingerprint values 
+B    [
+        unclip
+        "Symlink to: " over pathnameRead append print
+        swap
+        [ over swap
+          [ pathnameRead ] bi@
+          dup pprint ": " pprint
+          dup delete-file
+          link .
+        ] each
+        drop
+    ] each
+    ;
+
+:: delete-dups-in-folder ( vector -- )
+    vector 
+    values :> dups!
+    dups [ shortest-name ] keep nth name>> :> save
+    dups [ name>> save = not ] filter dups! 
+    dups empty? [
+        "No duplicates" print ]
+    [ dups first .dupFolder
+      dups delete-dups ]
+    if
+    ;
+
+! an array of vectors, each elementis an array of duplicate fingerprints
+: process-dups ( dups -- )
+    HERE.S
+    [ 
+      [ second pathRead ] collect-by
+      values  [ length 2 >= ] filter
+      [ delete-dups-in-folder ] each
+    ] each 
+    ;
+
+: test-files ( -- )
+    "/Users/davec/Music/Test" collect-files ;
+
+: x ( -- )
+    test-files
+    collection-folders
+    collection-dups process-dups
     ;
 

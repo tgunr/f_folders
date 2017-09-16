@@ -2,8 +2,8 @@
 ! See http://factorcode.org/license.txt for BSD license.
 USING: continuations definitions destructors io io.directories
 io.directories.hierarchy io.encodings.ascii io.encodings.utf8 io.files
-io.files.info io.files.temp io.pathnames kernel namespaces sequences
-tools.test ;
+io.files.info io.files.temp io.pathnames kernel locals namespaces
+sequences tools.test unix.ffi ;
 IN: folder.tests
 
 CONSTANT: TESTf "resource:work/folder/test"
@@ -29,14 +29,15 @@ SYMBOL: testfolder
 [ t ] [ "directory/" as-directory "directory/" = ] unit-test
 [ t ] [ "directory" as-file "directory" = ] unit-test
 [ t ] [ "directory/" as-file "directory" = ] unit-test
-[ f ] [ "directory" special-path? swap "directory" = and ] unit-test
-[ t ] [ "resource:directory" special-path? swap "directory" = and ] unit-test
-[ t ] [ "vocab:directory" special-path? swap "directory" = and ] unit-test
-[ t ] [ "~directory" special-path? swap "directory" = and ] unit-test 
-[ t ] [ "~/directory" special-path? swap "/directory" = and ] unit-test 
-[ t ] [ "" root? "/" = ] unit-test
-[ f ] [ "/folder" root? "/" = ] unit-test
+[ f ] [ "directory" special? swap "directory" = and ] unit-test
+[ t ] [ "resource:directory" special? swap "directory" = and ] unit-test
+[ t ] [ "vocab:directory" special? swap "directory" = and ] unit-test
+[ t ] [ "~directory" special? swap "directory" = and ] unit-test 
+[ t ] [ "~/directory" special? swap "/directory" = and ] unit-test 
+[ t ] [ "" (empty-to-root) "/" = ] unit-test
+[ f ] [ "/folder" (empty-to-root) "/" = ] unit-test
 
+[ t ] [ [let "HOME" getenv :> home "~" home-path  home = ] ] unit-test
 
 ! [ f ] [ TESTf dup delete-tree exists? ] unit-test
 [ { "kernel" } ] [

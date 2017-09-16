@@ -144,7 +144,7 @@ HELP: special-path?
 { $description "Determines if a path is special, e.g. begins with resource: vocab: or ~" }
 { $examples
   { $code 
-    "\"~/Desktop\" special-path?"
+    "\"~/Desktop\" special?"
     ""
     "--- Data stack:"
     "\"/Desktop\""
@@ -166,18 +166,18 @@ HELP: as-file
 }
 ;
 
-HELP: root?
+HELP: (empty-to-root)
 { $values { "path" string } { "path'" string } }
 { $description "Converts an empty string (given as a path) into the root path \ " }
 ;
 
-HELP: home-path
-{ $values { "path" string } { "newpath" string } }
-{ $description "Prefixes the user home path to a path" }
-{ $notes "Used to expand a ~ in a path to a user home folder e.g. ~davec/path becomes "
-" /Users/davec/path"
-}
-;
+! HELP: (homepath)
+! { $values { "path" string } { "newpath" string } }
+! { $description "Prefixes the user home path to a path" }
+! { $notes "Used to expand a ~ in a path to a user home folder e.g. ~davec/path becomes "
+! " /Users/davec/path"
+! }
+! ;
 
 IN: io.pathnames-docs
 HELP: absolute-path

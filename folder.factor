@@ -11,10 +11,11 @@
 
 
 USING: accessors checksums checksums.adler-32 checksums.fnv1
-classes.tuple combinators continuations file.xattr io io.backend
-io.files io.files.info io.files.links io.streams.c kernel libc locals
-math math.order math.parser namespaces prettyprint prettyprint.custom
-words regexp sequences sorting splitting strings unix.users ;
+classes.tuple combinators continuations file.xattr
+file.xattr.lib io io.backend io.files io.files.info
+io.files.links io.streams.c kernel libc locals math math.order
+math.parser namespaces prettyprint prettyprint.custom regexp
+sequences sorting splitting strings unix.users words ;
 
 IN: io.pathnames
 
@@ -52,12 +53,12 @@ IN: io.pathnames
         [ f ]
     } cond ;
 
-: root? ( path -- path' )
+: (empty-to-root) ( path -- path' )
     [ "" = ] keep "/" swap ?
     ;
 
-: home-path ( path -- newpath )
-    root?
+: (homepath) ( path -- newpath )
+    (empty-to-root)
     [ "/" head? ] keep
     path-components swap
     [ home prefix ]                        
@@ -80,7 +81,7 @@ M: string absolute-path
             trim-head-separators vocab-path
             absolute-path
         ] [ "~" ?head
-            [ home-path ]
+            [ (homepath) ]
             [ current-directory get prepend-path
             ] if
         ] if
