@@ -8,7 +8,7 @@
 USING: accessors assocs checksums checksums.sha folder io
 io.directories io.files.links io.pathnames kernel layouts locals
 math namespaces prettyprint regexp sequences sequences.extras
-splitting threads words unix.ffi ;
+serialize splitting threads words unix.ffi ;
 
 FROM: string => to-folder ;
 FROM: folder => pathname ;
@@ -84,6 +84,12 @@ SYMBOL: duplicates
     filter-dot-names
     ;
 
+CONSTANT: COLLECTION-SAVE "/tmp/collection.fstore"
+: save-collection ( -- )
+    collection get COLLECTION-SAVE save-fstore ;
+: restore-collection ( -- )
+    COLLECTION-SAVE load-fstore  collection set ; 
+    
 : collect-files ( path -- )
     to-folder
     "Collecting files:" print
@@ -95,6 +101,7 @@ SYMBOL: duplicates
     ] map>alist
     [ first ] collect-by
     collection set
+    save-collection
     ;
 
 : shasum-dups ( dups -- shasumdups )
@@ -169,21 +176,22 @@ SYMBOL: duplicates
     "Deleting duplicates in folder: " pprint
     pathRead print ;
 
-: collection-folders ( -- )
+: collection-by-folders ( -- )
     { }  collection get values
     [ [ second suffix ] each ] each
     [ pathnameRead ] collect-by 
     duplicates set ;
 
-: duplicates-fingerprint ( -- seq )
+: duplicates-by-fingerprint ( -- seq )
     { }  duplicates get values
     [ [ suffix ] each ] each
     [ fingerprintRead ] collect-by 
     ;
 
 : symlink-dups ( -- )
-    duplicates-fingerprint values 
-B    [
+    duplicates-by-fingerprint
+    [ nip length 2 >= ] assoc-filter values 
+    [
         unclip
         "Symlink to: " over pathnameRead append print
         swap
@@ -222,9 +230,12 @@ B    [
 : test-files ( -- )
     "/Users/davec/Music/Test" collect-files ;
 
-: x ( -- )
-    test-files
-    collection-folders
+: collection-dedup ( -- )
+    collection-by-folders
     collection-dups process-dups
+    symlink-dups
     ;
+
+: x ( -- )
+    test-files collection-dedup ;
 
