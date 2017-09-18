@@ -228,8 +228,8 @@ DEFER: fingerprintRead
     BUNDLEID "checksum.fnv1-32" append ;
 
 :: fingerprint-xattrStore ( fingerprint entry -- )
-    entry pathnameRead  
     fingerprintKey@  entry fingerprintRead  <xattr>
+    entry pathnameRead  
     xattrStore
     entry xattrsRead drop ; 
 
