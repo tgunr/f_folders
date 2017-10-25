@@ -248,8 +248,10 @@ DEFER: fingerprintRead
     ;
 
 :: fingerprint-xattrSet ( entry -- entry )
-    entry pathnameRead fnv1-32 checksum-file :> fp
-    fp entry  [ fingerprintWrite ] [ fingerprint-xattrStore ] 2bi
+    entry type>> +regular-file+ = [
+        entry pathnameRead fnv1-32 checksum-file :> fp
+        fp entry  [ fingerprintWrite ] [ fingerprint-xattrStore ] 2bi
+    ] when
     entry
 !    fp HERE.
     ;
