@@ -207,7 +207,7 @@ CONSTANT: COLLECTION-SAVE "/tmp/collection.fstore"
     ] each
     ;
 
-:: delete-dups-in-folder ( vector -- )
+:: (delete-dups-in-folder) ( vector -- )
     vector 
     values :> dups!
     dups [ shortest-name ] keep nth name>> :> save
@@ -219,13 +219,19 @@ CONSTANT: COLLECTION-SAVE "/tmp/collection.fstore"
     if
     ;
 
+: delete-dups-in-folder ( vector -- )
+      [ (delete-dups-in-folder) ] each ;
+
+SYMBOL: dup-process
+\ delete-dups-in-folder dup-process set
+
 ! an array of vectors, each elementis an array of duplicate fingerprints
 : process-dups ( dups -- )
     HERE.S
     [ 
       [ second pathRead ] collect-by
       values  [ length 2 >= ] filter
-      [ delete-dups-in-folder ] each
+      dup-process get execute( x -- )
     ] each 
     ;
 
