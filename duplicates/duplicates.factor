@@ -244,6 +244,21 @@ SYMBOL: dup-process
     symlink-dups
     ;
 
+: do-dups ( -- )
+    collection-dups process-dups ;
+
+SYMBOL: dup-size
+0 dup-size set
+:: namex ( v -- )
+    v values :> dups
+    dups empty? [
+        dups [ second :> e e name>> .
+               dup-size get
+               e info>> size-on-disk>> +
+               dup-size set  ] each
+    ] unless
+\ namex dup-process set
+
 : x ( -- )
     test-files collection-dedup ;
 
