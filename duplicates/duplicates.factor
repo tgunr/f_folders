@@ -14,7 +14,7 @@ FROM: string => to-folder ;
 FROM: folder => pathname ;
 IN: folder.duplicates
 
-CONSTANT: CHECK-FOLDER "/Volumes/alpha_music"
+"/Volumes/alpha_music" VARIABLE: CHECK-FOLDER
 
 : print-names ( entries -- )
     [ name>> print ] each ;
