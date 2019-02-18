@@ -317,9 +317,7 @@ SYMBOL: deep-folder
     ;
 
 IN: string
-
 GENERIC: to-folder ( path -- folder )
-
 M: string to-folder ( path -- folder )
     dup [ file-info ]
     [ nip drop f ]
@@ -329,25 +327,21 @@ M: string to-folder ( path -- folder )
 ;
 
 IN: folder
-
 : string-to-folder ( path -- folder )
-    to-folder ;
+    to-folder ; ! Uses string to-folder from above
 
-IN: io.directories
+! IN: io.directories
+! GENERIC: to-folder ( path directory-entry -- folder )
 
-GENERIC: to-folder ( path entry -- folder )
-
-M: directory-entry to-folder 
-    tuple-slots
-    swap normalize-path suffix
-    folder-entry prefix
-    >tuple
-;
+! M: directory-entry to-folder 
+!     tuple-slots
+!     swap normalize-path suffix
+!     folder-entry prefix
+!     >tuple
+! ;
 
 IN: folder
-
 GENERIC: pathname ( folder-entry -- path )
-
 M: folder-entry pathname
     pathnameRead ; 
 
@@ -441,9 +435,7 @@ FROM: string => to-folder ;
     ] each
     ;
         
-FROM: io.directories => to-folder ;
 FROM: io.pathnames => pathname ;
-
 : folder-entries ( folder -- entries )
     deep-folder get
     [ (folder-entries-deep)

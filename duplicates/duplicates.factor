@@ -1,20 +1,20 @@
 ! File: duplicates.factor
 ! Version: 0.1
 ! DRI: Dave Carlton
-! Description: Find duplicate files in a folder using fingerprints
+! Description: Another fine Factor file!
 ! Copyright (C) 2017 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
 
 USING: accessors assocs checksums checksums.sha folder io
 continuations io.directories io.files.links io.pathnames kernel layouts locals
 math namespaces prettyprint regexp sequences sequences.extras
-variables serialize splitting threads words unix.ffi ;
+serialize splitting threads words unix.ffi ;
 
 FROM: string => to-folder ;
 FROM: folder => pathname ;
 IN: folder.duplicates
 
-"/Volumes/alpha_music" VARIABLE: CHECK-FOLDER
+CONSTANT: CHECK-FOLDER "/Volumes/alpha_music"
 
 : print-names ( entries -- )
     [ name>> print ] each ;

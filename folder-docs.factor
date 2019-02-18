@@ -1,7 +1,8 @@
 ! Copyright (C) 2012 PolyMicro Systems.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: help.markup help.syntax images io.backend io.directories kernel
-quotations sequences strings ;
+USING: help.markup help.syntax images io.backend io.directories
+io.files.types kernel quotations sequences strings ;
+
 
 IN: io.pathnames
 HELP: space?
@@ -112,7 +113,9 @@ HELP: with-directory-files
 ARTICLE: "folder" "Folders"
 "The " { $vocab-link "folder-entry" }
 " vocabulary is a subclass of " { $snippet "directory-entry" } " in "
-{ $vocab-link "io.directories" }  ". A folder-entry contains the an additional slot "
+{ $vocab-link "io.directories" }  ". 
+
+A folder-entry contains the additional slot "
 { $slot "path" }
 " as a full path to an entry. It is intended for use when the pathname is needed for more"
 " complex operations on folders and files. The vocabulary contains words matching the usage"
@@ -205,6 +208,12 @@ $nl
 
 
 IN: folder-docs
+ARTICLE: "folders" "Folder tools"
+"
+Provides tools to examine and manipulate folders and files. 
+"
+    ;
+
 HELP: remove-extension
 { $values { "path" string } { "path" string } }
 { $description "Removes the last extenstion of a path." }
@@ -221,13 +230,19 @@ HELP: remove-acl
 { $description "Removes all ACL from a path." }
 ;
 
-HELP: to-folder
-{ $values { "path" string } { "folder" folder-entry } }
-{ $description "Converts a path as string into a folder object." }
-{ $examples
-  { $code 
-        "~/Desktop" to-folder
-    }
+IN: io.directories
+HELP: directory-entry
+{ $description "A tuple containing the name of a directory entry and its type as one of 
+" }
+{ $subsections
+    +regular-file+
+    +directory+
 }
-{ $notes "No Notes" }
 ;
+
+! HELP: to-folder
+! { $values { "path" string } { "directory-entry" directory-entry } { "folder" folder-entry } }
+! { $description "Converts the given directory-entry to the given path into a folder object." }
+! { $example "USING: folder ;" "\"~/Desktop\" to-folder" "T{ folder-entry f \"Desktop\" +directory+ \"/Users/davec/Desktop\""} print-element 
+! { $notes "No Notes" }
+! ;

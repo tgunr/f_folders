@@ -1,53 +1,79 @@
 ! Copyright (C) 2012 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: accessors classes combinators folder io io.directories
-io.directories.hierarchy io.pathnames kernel locals namespaces regexp
+USING: accessors checksums checksums.sha classes combinators
+folder io io.backend io.directories io.directories.hierarchy
+io.pathnames kernel locals namespaces regexp regexp.combinators
 sequences sets strings tools.continuations ;
+
+FROM: namespaces => set ;
+FROM: namespaces => set ;
+FROM: namespaces => set ;
+FROM: folder => pathname ;
+FROM: string => to-folder ;
+FROM: folder => pathname ;
+FROM: folder => pathname ;
 IN: folder.compare
 
-: filter-nothing ( -- regexp )  "(?!.*)" ;
-: filter-hidden ( -- regexp ) "[.].*" ;
-: filter-git ( -- regexp ) ".*[.]git.*" ;
+: filter-nothing ( -- regexp )
+    "(?!.*)" <regexp> ;
+
+: filter-hidden ( -- regexp )
+    { "[/][.].*" "[.].*" }
+    [ <regexp> ] map
+    <or> ;
+
+: filter-git ( -- regexp )
+    ".*[.]git.*" <regexp> ;
 
 FROM: namespaces => set ;
 SYMBOL: folder-filter
-filter-nothing folder-filter set ! default is exclude nothing
+
+: folder-filter-reset ( -- )
+    filter-nothing folder-filter set ! default is exclude nothing
+    ;
 
 TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries ;
 : <folder-compare> ( src dst -- folder.compare )
     folder-compare new
     [ directory-tree-files ] >>dir-word ! default is deep compare
     folder-filter get
-    dup [ ] [ drop filter-nothing <regexp> ]
-        if >>filter
-        swap >>dst-path
-        swap  >>src-path
+    dup [ ] [ drop filter-nothing ] if >>filter
+    swap >>dst-path
+    swap >>src-path
 ;
 
 ! Accessors
-: «src-path ( folder.compare -- path folder-compare )
-    [ src-path>> ] keep ;
+! : «src-path ( folder.compare -- path folder-compare )
+!     [ src-path>> ] keep ;
+! : src-pathGet ( folder.compare -- path folder-compare )   «src-path ;
 
-: »src-path ( path folder.compare -- folder-compare )
-    swap >>src-path ;
+! : »src-path ( path folder.compare -- folder-compare )
+!     swap >>src-path ;
+! : src-pathSet ( path folder.compare -- folder-compare )   »src-path ;
 
-: «dst-path ( folder.compare -- path folder-compare )
-    [ dst-path>> ] keep ;
+! : «dst-path ( folder.compare -- path folder-compare )
+!     [ dst-path>> ] keep ;
+! : dst-pathGet ( folder.compare -- path folder-compare )   «dst-path ;
 
-: »dst-path ( path folder.compare -- folder-compare )
-    swap >>dst-path ;
+! : »dst-path ( path folder.compare -- folder-compare )
+!     swap >>dst-path ;
+! : dst-pathSet ( path folder.compare -- folder-compare )   »dst-path ;
 
-: «src-entries ( folder.compare -- seq folder-compare )
-    [ src-entries>> ] keep ;
+! : «src-entries ( folder.compare -- seq folder-compare )
+!     [ src-entries>> ] keep ;
+! : src-entriesGet ( folder.compare -- seq folder-compare )   «src-entries ;
 
-: »src-entries ( seq folder.compare -- folder-compare )
-    swap >>src-entries ;
+! : »src-entries ( seq folder.compare -- folder-compare )
+!     swap >>src-entries ;
+! : src-entriesSet ( seq folder.compare -- folder-compare )   »src-entries ;
 
-: «dst-entries ( folder.compare -- seq folder-compare )
-    [ dst-entries>> ] keep ;
+! : «dst-entries ( folder.compare -- seq folder-compare )
+!     [ dst-entries>> ] keep ;
+! : dst-entriesGet ( folder.compare -- seq folder-compare )   «dst-entries ;
 
-: »dst-entries ( seq folder.compare -- folder-compare )
-    swap >>dst-entries ;
+! : »dst-entries ( seq folder.compare -- folder-compare )
+!     swap >>dst-entries ;
+! : dst-entriesSet ( seq folder.compare -- folder-compare )   »dst-entries ;
 
 : create-src-entries ( folder.compare -- folder.compare' )
     [ dup filter>> 
@@ -61,7 +87,8 @@ TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries 
 : create-dst-entries ( folder.compare -- folder.compare' )
     [ dup filter>>
       over dst-path>>
-      rot dir-word>> call( path -- seq )
+      rot dir-word>>
+      call( path -- seq )
       [ swap matches? not ] with filter ] keep
     swap >>dst-entries
 ;
@@ -83,10 +110,10 @@ TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries 
     ;
 
 : swap-entries ( folder.compare -- folder.compare )
-    «src-path «src-entries
-    «dst-path «dst-entries
-    »src-entries »src-path
-    »dst-entries »dst-path ;
+    <<src-path <<src-entries
+    <<dst-path <<dst-entries
+    >>src-entries >>src-path
+    >>dst-entries >>dst-path ;
 
 SYMBOL: folder-pair
 
@@ -203,6 +230,13 @@ FROM: string => to-folder ;
     ] each
     ;
 
+: checksum= ( folder-entry folder-entery -- f )
+    [ pathnameRead ] bi@
+    [ [ sha-256 checksum-file ] curry ] bi@
+    [ call ] bi@
+    =
+    ;
+
 FROM: folder => pathname ;
 :: folder-md5diff ( folder.compare -- x )
     folder.compare folder-entries intersect
@@ -212,46 +246,83 @@ FROM: folder => pathname ;
       swap prefix
       swap prefix
     ] 2map
-     [ first not ] filter
-     [ 1 tail first ] map
+     [ first not ] filter ! Filter out ones not equal
+     [ 1 tail first ] map 
     ;
 
-: folder-rm ( folder.compare mode -- x )
-    [ ] curry keep
-    dst-path>> as-directory swap 
-    [ over prepend ] map
-    [ delete-file ] each
-    drop
+! : folder-rm ( folder.compare mode -- x )
+!     [ ] curry keep
+!     dst-path>> as-directory swap 
+!     [ over prepend ] map
+!     [ delete-file ] each
+!     drop
+!     ;
+
+CONSTANT: f1 "/Applications"
+CONSTANT: f2 "/Applications/Aux"
+
+: check-for-subpath ( path path -- path path )
+    2dup
+    [ normalize-path ] bi@
+    [ path-components ] bi@
+    [ first ] bi@
+    =
+    [
+        [
+            path-components
+            path-separator "[" "]" surround
+            [ join ] keep
+            [ prepend ] keep
+            append  ".*" append
+            <regexp> { } 1sequence
+            folder-filter get  prefix
+            <or> folder-filter set
+        ] keep
+    ] when
     ;
 
-CONSTANT: f3 "/Volumes/mphd/Users/davec"
-CONSTANT: f4 "/Users/davec"
+    
 FROM: folder => pathname ;
-: compare-this ( -- x )
-    f3 f4 <folder-compare>
+: compare-these ( path path -- x )
+    ! check-for-subpath ! Exclude if dst subpath is in src path
+    <folder-compare>
+    ;
+
+: compare-f3f4 ( -- x )
+    f1 f2 compare-these
     ;
 
 : not-in-dst ( folder.compare -- seq )
     [ folder-diff ] keep
-    src-path>> as-directory 
+    src-path>> as-file
     swap [ append ] with map
     ;
 
-: test-src ( -- )
-    compare-this not-in-dst [ print ] each ;
+: test-src ( -- seq )
+    compare-f3f4
+    "These files are not in the destination: "
+    over dst-path>> append print
+    not-in-dst ;
  
-: test-dst ( -- )
-    compare-this swap-entries not-in-dst [ print ] each ;
+: test-dst ( -- seq )
+    compare-f3f4
+    "These files are not in the source: "
+    over src-path>> append print 
+    swap-entries not-in-dst ;
  
-: test-intersect ( -- )
-    compare-this folder-intersect [ print ] each
+: test-intersect ( -- seq )
+    compare-f3f4
+    "These files are found in the both folders " print
+    folder-intersect 
     ;
 
-: test-union ( -- )
-    compare-this folder-union [ print ] each
+: test-union ( -- seq )
+    compare-f3f4
+    "These are all the files in  both folders " print
+    folder-union 
     ;
 
-: test-md5 ( -- )
-    compare-this folder-md5diff [ pathname print ] each
+: test-md5 ( -- seq )
+    compare-f3f4 folder-md5diff 
     ;
  
