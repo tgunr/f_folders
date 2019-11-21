@@ -1,9 +1,10 @@
 ! Copyright (C) 2012 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
 USING: accessors checksums checksums.sha classes combinators
-folder io io.backend io.directories io.directories.hierarchy
-io.pathnames kernel locals namespaces regexp regexp.combinators
-sequences sets strings tools.continuations ;
+folder help.syntax io io.backend io.directories
+io.directories.hierarchy io.pathnames kernel locals namespaces
+regexp regexp.combinators sequences sets strings
+tools.continuations ;
 
 FROM: namespaces => set ;
 FROM: namespaces => set ;
@@ -33,7 +34,7 @@ SYMBOL: folder-filter
     ;
 
 TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries ;
-: <folder-compare> ( src dst -- folder.compare )
+: <folder-compare> ( src dst -- folder-compare )
     folder-compare new
     [ directory-tree-files ] >>dir-word ! default is deep compare
     folder-filter get
@@ -42,40 +43,7 @@ TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries 
     swap >>src-path
 ;
 
-! Accessors
-! : «src-path ( folder.compare -- path folder-compare )
-!     [ src-path>> ] keep ;
-! : src-pathGet ( folder.compare -- path folder-compare )   «src-path ;
-
-! : »src-path ( path folder.compare -- folder-compare )
-!     swap >>src-path ;
-! : src-pathSet ( path folder.compare -- folder-compare )   »src-path ;
-
-! : «dst-path ( folder.compare -- path folder-compare )
-!     [ dst-path>> ] keep ;
-! : dst-pathGet ( folder.compare -- path folder-compare )   «dst-path ;
-
-! : »dst-path ( path folder.compare -- folder-compare )
-!     swap >>dst-path ;
-! : dst-pathSet ( path folder.compare -- folder-compare )   »dst-path ;
-
-! : «src-entries ( folder.compare -- seq folder-compare )
-!     [ src-entries>> ] keep ;
-! : src-entriesGet ( folder.compare -- seq folder-compare )   «src-entries ;
-
-! : »src-entries ( seq folder.compare -- folder-compare )
-!     swap >>src-entries ;
-! : src-entriesSet ( seq folder.compare -- folder-compare )   »src-entries ;
-
-! : «dst-entries ( folder.compare -- seq folder-compare )
-!     [ dst-entries>> ] keep ;
-! : dst-entriesGet ( folder.compare -- seq folder-compare )   «dst-entries ;
-
-! : »dst-entries ( seq folder.compare -- folder-compare )
-!     swap >>dst-entries ;
-! : dst-entriesSet ( seq folder.compare -- folder-compare )   »dst-entries ;
-
-: create-src-entries ( folder.compare -- folder.compare' )
+: create-src-entries ( folder-compare -- folder-compare' )
     [ dup filter>> 
       over src-path>>
       rot dir-word>> 
@@ -84,7 +52,7 @@ TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries 
       swap >>src-entries
 ;
 
-: create-dst-entries ( folder.compare -- folder.compare' )
+: create-dst-entries ( folder-compare -- folder-compare' )
     [ dup filter>>
       over dst-path>>
       rot dir-word>>
@@ -93,7 +61,7 @@ TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries 
     swap >>dst-entries
 ;
 
-: set-filter ( folder.compare filter -- folder.compare' )
+: set-filter ( folder-compare filter -- folder-compare' )
     dup class-of
     {
         { string [ <regexp> ] }
@@ -103,13 +71,13 @@ TUPLE: folder-compare src-path dst-path dir-word filter src-entries dst-entries 
     >>filter 
     ;
 
-: set-dir-word ( folder.compare t|f -- folder.compare' )
+: set-dir-word ( folder-compare t|f -- folder-compare' )
     [ [ directory-tree-files ] >>dir-word ]
     [ [ directory-files ] >>dir-word ]
     if
     ;
 
-: swap-entries ( folder.compare -- folder.compare )
+: swap-entries ( folder-compare -- folder-compare )
     <<src-path <<src-entries
     <<dst-path <<dst-entries
     >>src-entries >>src-path
@@ -149,21 +117,27 @@ FROM: namespaces => set ;
 : deep ( -- t ) t ;
 : shallow ( -- f ) f ;
 
-: create-entries ( folder.compare -- folder.compare )
+: as-shallow ( folder-compare -- 'folder-compare )
+    shallow set-dir-word ;
+
+: as-deep ( folder-compare -- 'folder-compare )
+    deep set-dir-word ;
+
+: create-entries ( folder-compare -- folder-compare )
     create-src-entries
     create-dst-entries ;
 
-: new-deep-compare ( src dst -- folder.compare )
+: new-deep-compare ( src dst -- folder-compare )
     <folder-compare> 
     deep set-dir-word
 ;
 
-: new-shallow-compare ( src dst -- folder.compare )
+: new-shallow-compare ( src dst -- folder-compare )
     <folder-compare> 
     shallow set-dir-word
 ;
 
-GENERIC: to-folder-compare ( src dst -- folder.compare )
+GENERIC: to-folder-compare ( src dst -- folder-compare )
 M: string to-folder-compare
     <folder-compare> ;
 
@@ -173,37 +147,37 @@ M: folder-entry to-folder-compare
     swap pathname
     <folder-compare> ;
 
-: src-entries ( folder.compare -- seq )
+: src-entries ( folder-compare -- seq )
     dup
     src-entries>> dup
     [ nip ]
     [ drop create-src-entries src-entries>> ] if 
     ;
 
-: dst-entries ( folder.compare -- seq )
+: dst-entries ( folder-compare -- seq )
     dup
     dst-entries>> dup
     [ nip ] 
     [ drop create-dst-entries dst-entries>> ] if
     ;
 
-: folder-entries ( folder.compare -- src-entries dst-entries )
+: folder-entries ( folder-compare -- src-entries dst-entries )
     dup src-entries    
     swap dst-entries
 ;
 
-: folder-diff ( folder.compare -- seq )
+: folder-diff ( folder-compare -- seq )
     folder-entries diff ;
 
-: folder-intersect ( folder.compare -- seq )
+: folder-intersect ( folder-compare -- seq )
     folder-entries intersect
     ;
 
-: folder-union ( folder.compare -- seq )
+: folder-union ( folder-compare -- seq )
     folder-entries union
     ;
 
-: folder-move ( folder.compare -- seq x )
+: folder-move ( folder-compare -- seq x )
     ! List of files in SRC not in DST
     [ folder-diff ] keep
     [ src-path>> as-directory swap [ append ] with map ] keep
@@ -214,9 +188,9 @@ M: folder-entry to-folder-compare
     ;
 
 FROM: string => to-folder ;
-:: gather-files ( seq folder.compare -- seq1 seq2 )
-    folder.compare src-path>> as-directory :> path1
-    folder.compare dst-path>> as-directory :> path2
+:: gather-files ( seq folder-compare -- seq1 seq2 )
+    folder-compare src-path>> as-directory :> path1
+    folder-compare dst-path>> as-directory :> path2
     { } { } 
     seq [ 
         [ path1 prepend to-folder
@@ -238,9 +212,9 @@ FROM: string => to-folder ;
     ;
 
 FROM: folder => pathname ;
-:: folder-md5diff ( folder.compare -- x )
-    folder.compare folder-entries intersect
-    folder.compare gather-files 
+:: folder-fingerprint-diff ( folder-compare -- x )
+    folder-compare folder-entries intersect
+    folder-compare gather-files 
     [ [ checksum= ] 2keep
       V{ } swap prefix
       swap prefix
@@ -250,7 +224,7 @@ FROM: folder => pathname ;
      [ 1 tail first ] map 
     ;
 
-! : folder-rm ( folder.compare mode -- x )
+! : folder-rm ( folder-compare mode -- x )
 !     [ ] curry keep
 !     dst-path>> as-directory swap 
 !     [ over prepend ] map
@@ -261,7 +235,7 @@ FROM: folder => pathname ;
 CONSTANT: f1 "/Applications"
 CONSTANT: f2 "/Applications/Aux"
 
-: check-for-subpath ( path path -- path path )
+: has-subpath ( path path -- path path )
     2dup
     [ normalize-path ] bi@
     [ path-components ] bi@
@@ -280,7 +254,6 @@ CONSTANT: f2 "/Applications/Aux"
         ] keep
     ] when
     ;
-
     
 FROM: folder => pathname ;
 : compare-these ( path path -- x )
@@ -292,7 +265,7 @@ FROM: folder => pathname ;
     f1 f2 compare-these
     ;
 
-: not-in-dst ( folder.compare -- seq )
+: not-in-dst ( folder-compare -- seq )
     [ folder-diff ] keep
     src-path>> as-file
     swap [ append ] with map
@@ -323,6 +296,6 @@ FROM: folder => pathname ;
     ;
 
 : test-md5 ( -- seq )
-    compare-f3f4 folder-md5diff 
+    compare-f3f4 folder-fingerprint-diff 
     ;
  

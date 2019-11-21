@@ -11,14 +11,12 @@
 
 
 USING: accessors checksums checksums.adler-32 checksums.fnv1
-classes.tuple combinators continuations file.xattr
-file.xattr.lib io io.backend io.files io.files.info
-io.files.links io.streams.c kernel libc locals math math.order
-math.parser namespaces prettyprint prettyprint.custom regexp
-sequences sorting splitting strings unix.users words ;
+combinators continuations file.xattr io io.backend io.files
+io.files.info io.files.links io.streams.c kernel layouts libc locals
+math math.order math.parser namespaces prettyprint.custom regexp
+sequences sorting splitting strings unix.users ;
 
-IN: io.pathnames
-
+IN: strings
 : space? ( ch -- ? ) 32 = ;
 : tab? ( ch -- ? ) 9 = ;
 
@@ -27,12 +25,16 @@ IN: io.pathnames
     [ [ space? ] [ tab? ] bi or ] trim-tail
     ;
 
+: quote-soft ( string -- string' )
+    "\"" dup surround ;
+
+: quote-hard ( string -- string' )
+    "'" dup surround ;
+
+IN: io.pathnames
 : components-to-path ( seq -- path )
     "/" join
     ;
-
-: quote-string ( string -- string' )
-    "\"" dup surround ;
 
 : as-directory ( path -- path' )
     [ last CHAR: / = ] keep
@@ -148,20 +150,18 @@ IN: folder
 
 CONSTANT: BUNDLEID "net.polymicro."
 
-CONSTANT: TEST "~/test"
+CONSTANT: TEST "~/Sources"
 CONSTANT: DOMAIN-ID "net.polymicro."
     
-TUPLE: folder-entry < directory-entry path info xattrs entries fingerprint ;
+TUPLE: folder-entry < directory-entry path info xattrs entries fingerprint depth ;
 
-: (folder-entry) ( name info path -- name type path info xattrs entries fingerprint )
-        swap normalize-path
+: (folder-entry) ( name info path -- name type path info xattrs entries fingerprint depth )
+    swap normalize-path
     over ! check for existence
-    [
-        [ dup type>> swap ] dip  swap ! adjust stack: name type path info
-    ] [
-        [ drop +nonexistent-file+ ] dip f
+    [ [ dup type>> swap ] dip  swap ] ! adjust stack: name type path info
+    [ [ drop +nonexistent-file+ ] dip f
     ] if
-    f f f ! xattrs, entries and fingerprint are f until needed
+    f f f f ! xattrs, entries, fingerprint and depth are f until needed
     ;
 
  : <folder-entry> ( name info path -- folder )
@@ -301,10 +301,10 @@ DEFER: fingerprintRead
     "." normalize-path ;
 
 ! Default is shallow, will not look into subdirectories
-SYMBOL: deep-folder
+SYMBOL: depth
 
-: deep ( -- )   t deep-folder set ;
-: notdeep ( -- )  f deep-folder set ;
+: deep ( -- )   t depth set ;
+: notdeep ( -- )  f depth set ;
 
 : is-dot? ( entry -- ? )
     name>> { "." ".." } member? ;
@@ -386,6 +386,8 @@ M: folder-entry absolute-path pathname absolute-path ;
 FROM: io.directories => (directory-entries) ;
 FROM: string => to-folder ;
 
+SYMBOL: †level
+
 : (folder-entries) ( folder -- entries )
     typeGet [ +nonexistent-file+ = ] dip  swap
     [ drop { } ]
@@ -401,17 +403,18 @@ FROM: string => to-folder ;
     ] if
     ;
 
+SYMBOL: †test-level
 ! Recurse into folder and get every file stored into entries
 : (folder-entries-deep) ( folder -- entries )
    (folder-entries)
-    [
-        dup is-directory?
-        [
-            is-dot-dir? not 
-            [ 
-                [ pathname to-folder (folder-entries-deep) ] keep 
-                swap >>entries
+    [ dup is-directory?
+      [ is-dot-dir? not 
+          [ †level get †test-level get <=
+            [ †level get 1 + †level set
+              [ pathname to-folder (folder-entries-deep) ] keep 
+              swap >>entries
             ] when
+          ] when
         ] when
     ] map
     ;
@@ -422,7 +425,7 @@ FROM: string => to-folder ;
         dup is-directory? [
             [ is-dot-dir? not ] keep
             swap
-            [ entries>> (deep-entries)
+            [ entries>> B (deep-entries)
               nip append
             ] 
             [ dup is-dot? 
@@ -437,14 +440,23 @@ FROM: string => to-folder ;
         
 FROM: io.pathnames => pathname ;
 : folder-entries ( folder -- entries )
-    deep-folder get
+    dup depth>> dup
+    {
+      { t [ drop most-positive-fixnum ] }
+      { f [ drop 0 ] }
+      [ drop ]
+    } case
+    dup †test-level set
+    0 †level set
+    dup [ >>depth ] dip  0 >
+    ! If depth is t, then replace with big number, pass thru otherwise
     [ (folder-entries-deep)
       (deep-entries)
     ]
     [ (folder-entries) ]
     if
     [ is-dot? not ] filter 
-;
+    ;
 
 : folder-filenames ( folder -- seq )
     folder-entries [ name>> ] map! ;
