@@ -9,6 +9,13 @@
 ! Copyright (C) 2011 PolyMicro Systems.
 ! See http://polymicrosystems.com/license for license details.
 
+USING: accessors checksums checksums.adler-32 checksums.fnv1
+classes.tuple combinators continuations file.xattr io io.backend
+io.files io.files.info io.files.links io.streams.c kernel libc locals
+math math.order math.parser namespaces prettyprint.custom regexp
+sequences sorting splitting strings threads unix.ffi unix.users words
+variables 
+;
 
 USING: accessors checksums checksums.adler-32 checksums.fnv1
 combinators continuations file.xattr io io.backend io.files
@@ -309,6 +316,9 @@ SYMBOL: depth
 : is-dot? ( entry -- ? )
     name>> { "." ".." } member? ;
 
+: starts-with-dot? ( entry -- ? )
+    R/ ^\..*\// swap name=~? ;
+    
 : is-dot-dir? ( entry -- entry ? )
     [ is-directory? ] keep 
     [ is-dot? ] keep  
@@ -319,7 +329,7 @@ SYMBOL: depth
 IN: string
 GENERIC: to-folder ( path -- folder )
 M: string to-folder ( path -- folder )
-    dup [ file-info ]
+    dup [ link-info ]
     [ nip drop f ]
     recover
     [ last-path-component ] dip
@@ -388,13 +398,33 @@ FROM: string => to-folder ;
 
 SYMBOL: †level
 
+: count-by ( n -- )   COUNTBY set  0 ENTRY-COUNT set ;
+: +count ( n -- )   ENTRY-COUNT get  +  ENTRY-COUNT set ;
+    
+: (folder-filter) ( entry -- ? )
+    is-dot-dir? not  nip ;
+
+SYMBOL: FolderFilter
+
+: folder-filter ( entry -- ? )
+    FolderFilter get dup
+    [ execute( entry -- ? ) ]
+    [ drop  (folder-filter) ]
+    if
+    ;
+    
 : (folder-entries) ( folder -- entries )
     typeGet [ +nonexistent-file+ = ] dip  swap
     [ drop { } ]
     [
-        [ pathname ] keep
-        [ (directory-entries) ] dip
-        [ [ is-dot-dir? not nip ] filter ] dip
+        yield
+        [ pathname>> ] keep
+        [ 
+            [ (directory-entries) ]
+            [ message>>  ": " prepend  append  print  { } ]
+            recover
+        ] dip
+        [ [ folder-filter ] filter ] dip
         swap
         [ over pathname "/" append
           [ name>> ] dip swap append to-folder
@@ -423,12 +453,11 @@ SYMBOL: †test-level
     { } swap
     [
         dup is-directory? [
-            [ is-dot-dir? not ] keep
-            swap
-            [ entries>> B (deep-entries)
+            [ is-dot-dir? not ] retain
+            [ entries>> (deep-entries)
               nip append
             ] 
-            [ dup is-dot? 
+            [ dup B is-dot? 
               [ 2drop ]
               [ drop suffix ]
               if
@@ -438,7 +467,6 @@ SYMBOL: †test-level
     ] each
     ;
         
-FROM: io.pathnames => pathname ;
 : folder-entries ( folder -- entries )
     dup depth>> dup
     {
@@ -456,7 +484,10 @@ FROM: io.pathnames => pathname ;
     [ (folder-entries) ]
     if
     [ is-dot? not ] filter 
-    ;
+;
+
+: testf ( -- x )
+    "~/test" to-folder  folder-entries ; 
 
 : folder-filenames ( folder -- seq )
     folder-entries [ name>> ] map! ;
@@ -469,6 +500,72 @@ FROM: io.pathnames => pathname ;
 
 : with-folder-filenames ( folder quot -- )
      [ folder-filenames ] dip each ; inline
+
+: open-entry ( entry -- )
+    dup type>>
+    {
+        { +regular-file+ [ path>> escape-string  "open " prepend  system ] }
+        { +directory+ [ pathname>> escape-string  "open " prepend  system ] }
+        { +symbolic-link+ [ path>> escape-string  "open " prepend  system ] }
+        { +nonexistent-file+ [ "Not a file" print ] }
+        [ drop  "Can't determine file type" HERE. ]
+    } case
+    drop
+    ;
+    
+: copy-entry ( from to -- )
+    2drop "Unimplemented" HERE.
+    ;
+
+: move-entry ( from to -- )
+    2drop "Unimplemented" HERE.
+    ;
+
+: rename-entry ( from to -- )
+    2drop "Unimplemented" HERE.
+    ;
+
+: delete-entry ( entry -- )
+    dup type>>  +nonexistent-file+ =
+    [ drop ]
+    [ [ dup  pathname>> delete-file
+        +nonexistent-file+ swap type<<
+      ]
+      [ error>string HERE.  drop ]
+      recover
+    ]
+    if
+;
+
+SYMBOL: (link-entries)
+    
+: symlink-entries ( entry1 entry2 -- )
+    over exists?
+    [ dup delete-entry
+      [ pathname>> ] bi@
+      [ symlink ] 2keep
+      pick 0≠
+      [ [ " to " append ] dip
+        append
+        "ERROR: " prepend  HERE.
+        drop
+      ]
+      [ drop 2drop ]
+      if
+    ]
+    [ drop  pathname>> " does not exist: " append  HERE. ]
+    if
+    ;
+
+: hardlink-entries ( entry1 entry2 -- )
+    over exists?
+    [ dup delete-entry 
+      [ pathname>> ] bi@
+      make-hard-link 
+    ]
+    [ drop  pathname>> " does not exist: " append  HERE. ]
+    if
+    ;
 
 M: folder-entry pprint* pprint-object ;
 
