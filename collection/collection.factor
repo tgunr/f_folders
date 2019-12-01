@@ -20,19 +20,19 @@ SYMBOL: collection
 : name. ( entry -- entry )
     [ name>> print ] keep ;
 
-: get-collection ( -- seq )
-    collection get [
-        COLLECTION-FOLDER get
-        qualified-directory-files
-        "Collecting files:" print
-        [ dup file-name print
-          sha1 checksum-file
-          yield ] map-zip 
-        collection set
-    ] unless
-    collection get
-    [ second ] collect-by
-    ;
+! : get-collection ( -- seq )
+!     collection get [
+!         COLLECTION-FOLDER get
+!         qualified-directory-files
+!         "Collecting files:" print
+!         [ dup file-name print
+!           sha1 checksum-file
+!           yield ] map-zip 
+!         collection set
+!     ] unless
+!     collection get
+!     [ second ] collect-by
+!     ;
 
 : save-collection ( -- )
     collection get COLLECTION get save-fstore ;
@@ -51,9 +51,7 @@ SYMBOL: collection
     to-folder
     "Collecting files:" print
     deep folder-entries
-    filter-entries 
     HERE" Fingerprinting"
-    100 count-by
     [
      !   dup name>> HERE.
         fingerprintGet
@@ -70,12 +68,11 @@ SYMBOL: collection
     [ "Collect files completed" print ] >>exit-handler ;
 
 : collect-files ( path -- )
-    restore-collection
     collection get 
     [ drop ]
-    [
-        [ (collect-files) ] curry "Collect Files" <thread>
-        (collect-files-callback) (spawn)
+    [ 100 count-by
+      [ (collect-files) ] curry "Collect Files" <thread>
+      (collect-files-callback) (spawn)
     ]
     if
     ;
@@ -94,11 +91,6 @@ SYMBOL: collection
     [ pathnameRead ] collect-by 
 ;
 
-: collection-files ( -- )
-    .HERE
-    100 count-by
-    COLLECTION-FOLDER get collect-files 
-    ;
 
 
         

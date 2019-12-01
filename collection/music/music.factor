@@ -1,7 +1,7 @@
 ! File: music.factor
 ! Version: 0.1
 ! DRI: Dave Carlton
-! Description: Another fine Factor file!
+! Description: Music collection manipulation
 ! Copyright (C) 2019 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
 
@@ -22,24 +22,32 @@ SYMBOL: SINGLES
 : restore-collection ( -- )
     MUSIC-COLLECTION (restore-collection) ; 
 
-
 : (singles) ( -- folder )
     SINGLES get to-folder ;
 
-: init-singles ( -- seq singles-folder )
+: set-symbols ( collection -- )
+    COLLECTION set
     MUSIC-FOLDER COLLECTION-FOLDER set
-    MUSIC-COLLECTION COLLECTION set
     "~/Music/Plex/Singles" SINGLES set
-    get-collection
-    filter-single-entry
-    (singles)
+    \ not-dot-file? FolderFilter set
     ;
 
 : delete-single-entries ( seq -- )
     [ delete-entry-tree ] each ;
 
-: do-singles ( -- )
-    init-singles 
+: (init-singles) ( -- )
+    MUSIC-FOLDER collect-files
+    collection get
+    filter-single-entry
+    (singles) 
     over [ over move-entries ] each drop
     delete-single-entries ;
 
+: do-singles ( -- )
+    MUSIC-COLLECTION set-symbols
+    (init-singles) ;
+
+: do-singles-new ( -- )
+    f collection set
+    f set-symbols
+    (init-singles) ;
