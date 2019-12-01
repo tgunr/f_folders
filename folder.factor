@@ -11,17 +11,11 @@
 
 USING: accessors checksums checksums.adler-32 checksums.fnv1
 classes.tuple combinators continuations file.xattr io io.backend
-io.files io.files.info io.files.links io.streams.c kernel libc locals
-math math.order math.parser namespaces prettyprint.custom regexp
-sequences sorting splitting strings threads unix.ffi unix.users words
-variables 
-;
-
-USING: accessors checksums checksums.adler-32 checksums.fnv1
-combinators continuations file.xattr io io.backend io.files
-io.files.info io.files.links io.streams.c kernel layouts libc locals
-math math.order math.parser namespaces prettyprint.custom regexp
-sequences sorting splitting strings unix.users ;
+io.directories.hierarchy io.files io.files.info io.files.links
+io.streams.c kernel layouts libc locals math math.order
+math.parser namespaces prettyprint.custom regexp sequences
+sorting splitting strings threads unix.ffi unix.users variables
+words ;
 
 IN: strings
 : space? ( ch -- ? ) 32 = ;
@@ -181,9 +175,11 @@ TUPLE: folder-entry < directory-entry path info xattrs entries fingerprint depth
 : pathnameRead ( entry -- path )
     [ pathRead ] keep  [ "/" append ] dip  nameRead append ; 
 : typeRead ( entry -- type )   type>> ; 
-    : infoRead ( entry -- info )   info>> ;
-    DEFER: does-exist?
-    DEFER: pathnameGet
+: infoRead ( entry -- info )   info>> ;
+
+DEFER: does-exist?
+DEFER: pathnameGet
+    
 : (xattrs@) ( entry -- xattrs )
     dup does-exist? [
         [ xattrs>> ] keep
@@ -307,27 +303,57 @@ DEFER: fingerprintRead
 : wwcd ( -- path )
     "." normalize-path ;
 
-! Default is shallow, will not look into subdirectories
-SYMBOL: depth
+: print-names ( entries -- )
+    [ name>> print ] each ;
 
-: deep ( -- )   t depth set ;
-: notdeep ( -- )  f depth set ;
+: dot-in-name ( entries -- entries )
+    dup
+    [ name>> "." split  first "" = ] filter
+    "Multiple . in name" print
+    print-names
+    ;
+
+: more-than-2 ( entries -- entries )
+    dup
+    "Multiple parts" print
+    [ name>> "." split length 2 = not ] filter
+    print-names
+    ;
+
+: underscore-in-name ( entries -- entries )
+    dup 
+    "Multiple underscores" print
+    [ name>> "_" split length 3 = ] filter
+    print-names
+    ;
+
+: find-in-name ( entry regexp -- t|f )
+    [ name>> ] dip re-contains? ; 
+
+: filter-_1 ( seq -- seq )
+    [ R/ .*_1\..*/ swap first find-in-name ] filter ;
+
+: filter-dot-names ( seq -- seq )
+    [ R/ ^\..*/ swap name=~? not ] filter ;
+
+! Default is shallow, will not look into subdirectories
+
+: deep ( entry -- entry )   t >>depth ;
+: notdeep ( entry -- entry )  f >>depth ;
 
 : is-dot? ( entry -- ? )
     name>> { "." ".." } member? ;
 
 : starts-with-dot? ( entry -- ? )
-    R/ ^\..*\// swap name=~? ;
+    R/ ^\..*/ swap name=~? ;
     
-: is-dot-dir? ( entry -- entry ? )
-    [ is-directory? ] keep 
-    [ is-dot? ] keep  
-    [ and ] dip 
-    swap
-    ;
+: is-dot-dir? ( entry -- ? )
+    [ is-directory? ] keep  is-dot?  and ;
 
 IN: string
 GENERIC: to-folder ( path -- folder )
+GENERIC: to-folder-tree ( path -- folder )
+
 M: string to-folder ( path -- folder )
     dup [ link-info ]
     [ nip drop f ]
@@ -336,19 +362,33 @@ M: string to-folder ( path -- folder )
     <folder-entry>
 ;
 
+M: string to-folder-tree ( path -- folder )
+    to-folder deep ;
+    
 IN: folder
 : string-to-folder ( path -- folder )
     to-folder ; ! Uses string to-folder from above
 
-! IN: io.directories
-! GENERIC: to-folder ( path directory-entry -- folder )
+: string-to-folder-tree ( path -- folder )
+    to-folder-tree ; ! Uses string to-folder-deep from above
 
-! M: directory-entry to-folder 
-!     tuple-slots
-!     swap normalize-path suffix
-!     folder-entry prefix
-!     >tuple
-! ;
+IN: io.directories
+GENERIC: to-folder ( path directory-entry -- folder )
+GENERIC: to-folder-tree ( path directory-entry -- folder )
+
+M: directory-entry to-folder 
+    tuple-slots
+    swap normalize-path suffix
+    folder-entry prefix
+    >tuple
+;
+
+M: directory-entry to-folder-tree
+    tuple-slots
+    swap normalize-path suffix
+    folder-entry prefix
+    >tuple deep
+;
 
 IN: folder
 GENERIC: pathname ( folder-entry -- path )
@@ -393,17 +433,24 @@ M: folder-entry hashcode*
 FROM: io.pathnames => absolute-path ;
 M: folder-entry absolute-path pathname absolute-path ;
 
-FROM: io.directories => (directory-entries) ;
-FROM: string => to-folder ;
+FROM: io.directories => (directory-entries) to-folder ;
 
 SYMBOL: †level
-
+SYMBOL: COUNTBY
+SYMBOL: ENTRY-COUNT
+    
 : count-by ( n -- )   COUNTBY set  0 ENTRY-COUNT set ;
 : +count ( n -- )   ENTRY-COUNT get  +  ENTRY-COUNT set ;
     
 : (folder-filter) ( entry -- ? )
-    is-dot-dir? not  nip ;
+    is-dot-dir? not ;
 
+: not-dot-file? ( entry -- ? )
+    [ is-dot-dir? not ] keep
+    starts-with-dot? not
+    and
+    ;
+    
 SYMBOL: FolderFilter
 
 : folder-filter ( entry -- ? )
@@ -418,7 +465,7 @@ SYMBOL: FolderFilter
     [ drop { } ]
     [
         yield
-        [ pathname>> ] keep
+        [ pathname ] keep
         [ 
             [ (directory-entries) ]
             [ message>>  ": " prepend  append  print  { } ]
@@ -426,26 +473,27 @@ SYMBOL: FolderFilter
         ] dip
         [ [ folder-filter ] filter ] dip
         swap
-        [ over pathname "/" append
-          [ name>> ] dip swap append to-folder
-        ] map
+        [ over pathname "/" append swap to-folder ] map
         >>entries entries>>
     ] if
     ;
 
 SYMBOL: †test-level
+
+FROM: string => to-folder-tree ;
+
 ! Recurse into folder and get every file stored into entries
 : (folder-entries-deep) ( folder -- entries )
    (folder-entries)
     [ dup is-directory?
-      [ is-dot-dir? not 
+      [ dup is-dot-dir? not 
           [ †level get †test-level get <=
             [ †level get 1 + †level set
-              [ pathname to-folder (folder-entries-deep) ] keep 
+              [ pathname to-folder-tree (folder-entries-deep) ] keep 
               swap >>entries
-            ] when
+            ] when 
           ] when
-        ] when
+      ] when
     ] map
     ;
 
@@ -453,11 +501,11 @@ SYMBOL: †test-level
     { } swap
     [
         dup is-directory? [
-            [ is-dot-dir? not ] retain
+            [ dup is-dot-dir? not ] retain
             [ entries>> (deep-entries)
               nip append
             ] 
-            [ dup B is-dot? 
+            [ dup is-dot? 
               [ 2drop ]
               [ drop suffix ]
               if
@@ -483,12 +531,13 @@ SYMBOL: †test-level
     ]
     [ (folder-entries) ]
     if
-    [ is-dot? not ] filter 
 ;
 
-: testf ( -- x )
-    "~/test" to-folder  folder-entries ; 
-
+: entry-files ( entry -- seq )
+    [ entries>> ] retain
+    [ name>>  over pathname as-directory  prepend ] map  nip
+    ;
+    
 : folder-filenames ( folder -- seq )
     folder-entries [ name>> ] map! ;
 
@@ -505,44 +554,88 @@ SYMBOL: †test-level
     dup type>>
     {
         { +regular-file+ [ path>> escape-string  "open " prepend  system ] }
-        { +directory+ [ pathname>> escape-string  "open " prepend  system ] }
+        { +directory+ [ pathname escape-string  "open " prepend  system ] }
         { +symbolic-link+ [ path>> escape-string  "open " prepend  system ] }
         { +nonexistent-file+ [ "Not a file" print ] }
         [ drop  "Can't determine file type" HERE. ]
     } case
     drop
     ;
+
+SYMBOL: ERRORS
+ 
+: copy-entry  ( from to -- )
+    [ [ pathname ] dip  pathname  copy-file-into ]
+    [ error>string
+      HERE.
+      { } 2sequence 
+      ERRORS get  swap suffix
+      ERRORS set
+    ]
+    recover    
+    ;
     
-: copy-entry ( from to -- )
-    2drop "Unimplemented" HERE.
+: copy-entries ( from to -- )
+    { } ERRORS set
+    2dup [ type>> +nonexistent-file+ ≠ ] bi@ or
+    [ over entries>> [ [ swap copy-entry ] retain  ] each 2drop ]
+    [ 2drop ]
+    if
     ;
 
-: move-entry ( from to -- )
-    2drop "Unimplemented" HERE.
+: move-entry  ( from to -- )
+    [ [ pathname ] dip  pathname  move-file-into ]
+    [ error>string
+      HERE.
+      { } 2sequence 
+      ERRORS get  swap suffix
+      ERRORS set
+    ]
+      recover    
     ;
+    
+: move-entries ( from to -- )
+    { } ERRORS set
+    2dup [ type>> +nonexistent-file+ ≠ ] bi@ or
+    [ over entries>> [ [ swap move-entry ] retain  ] each 2drop ]
+    [ 2drop ]
+    if
+    ;
+
 
 : rename-entry ( from to -- )
     2drop "Unimplemented" HERE.
     ;
 
 : delete-entry ( entry -- )
-    dup type>>  +nonexistent-file+ =
-    [ drop ]
-    [ [ dup  pathname>> delete-file
-        +nonexistent-file+ swap type<<
-      ]
-      [ error>string HERE.  drop ]
-      recover
+    [ dup
+      [ type>> ] retain
+      {
+          { +regular-file+ [ pathname delete-file ] }
+          { +directory+ [ pathname delete-directory ] }
+          { +symbolic-link+ [ pathname delete-file ] }
+          [ 2drop ]
+      } case
+      +nonexistent-file+ swap type<<
     ]
-    if
+    [ error>string HERE.  drop ]
+    recover
 ;
 
+: delete-entry-tree ( entry -- )
+    pathname
+    [ exists? ] retain 
+    [ delete-tree ]
+    [ drop ]
+    if
+    ;
+    
 SYMBOL: (link-entries)
     
 : symlink-entries ( entry1 entry2 -- )
     over exists?
     [ dup delete-entry
-      [ pathname>> ] bi@
+      [ pathname ] bi@
       [ symlink ] 2keep
       pick 0≠
       [ [ " to " append ] dip
@@ -553,17 +646,17 @@ SYMBOL: (link-entries)
       [ drop 2drop ]
       if
     ]
-    [ drop  pathname>> " does not exist: " append  HERE. ]
+    [ drop  pathname " does not exist: " append  HERE. ]
     if
     ;
 
 : hardlink-entries ( entry1 entry2 -- )
     over exists?
     [ dup delete-entry 
-      [ pathname>> ] bi@
+      [ pathname ] bi@
       make-hard-link 
     ]
-    [ drop  pathname>> " does not exist: " append  HERE. ]
+    [ drop  pathname " does not exist: " append  HERE. ]
     if
     ;
 

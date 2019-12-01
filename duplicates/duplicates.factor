@@ -29,7 +29,7 @@ SYMBOL: errors  errors [ { } ] initialize
     [ ! V{ array array }
         [ ! { entry fingerprint }
             first ! entry
-            dup pathname
+            dup pathnameRead
             dup print yield
             sha1 checksum-file ! entry fingerprint
             >>fingerprint ! entry
@@ -56,7 +56,7 @@ SYMBOL: errors  errors [ { } ] initialize
     pathnameRead duplicates get delete-at ;
 
 : delete-entry ( entry -- )
-    [ [ pathname delete-file ] keep
+    [ [ pathnameRead delete-file ] keep
       remove-entry ]
     [ error>string print  drop ]
     recover
@@ -107,9 +107,9 @@ SYMBOL: errors  errors [ { } ] initialize
     ;
 
 : delete&relink ( entry1 entry2 -- )
-    dup exists?
+    dup does-exist?
     [ dup delete-entry ] when
-    ".... " over pathname>> append print
+    ".... " over pathname append print
     hardlink-entries
     ;
 
@@ -164,9 +164,6 @@ SYMBOL: dup-process
     collection-dups process-dups
     symlink-dups
     ;
-
-: do-dups ( -- )
-    collection-dups process-dups ;
 
 SYMBOL: dup-size
 0 dup-size set

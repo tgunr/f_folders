@@ -5,25 +5,25 @@
 ! Copyright (C) 2019 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
 
-USING: accessors assocs checksums checksums.sha folder io
-continuations io.directories io.files.links io.pathnames kernel layouts locals
-math namespaces prettyprint regexp sequences sequences.extras
-serialize splitting threads words unix.ffi ;
+USING: accessors assocs checksums checksums.sha continuations folder
+folder.collection.music io io.directories io.files.links io.pathnames
+kernel layouts locals math namespaces prettyprint regexp sequences
+sequences.extras serialize splitting threads unix.ffi words ;
 
 IN: folder.collection
 FROM: string => to-folder ;
 
-! CONSTANT: COLLECTION-FOLDER "/gamma/pictures"
-! CONSTANT: COLLECTION-FOLDER "/Users/davec/Music/Plex"
-VARIABLE: COLLECTION-FOLDER "~/test"
+SYMBOL: COLLECTION-FOLDER 
+SYMBOL: COLLECTION
+SYMBOL: collection
 
 : name. ( entry -- entry )
     [ name>> print ] keep ;
 
-SYMBOL: collection
 : get-collection ( -- seq )
     collection get [
-        COLLECTION-FOLDER qualified-directory-files
+        COLLECTION-FOLDER get
+        qualified-directory-files
         "Collecting files:" print
         [ dup file-name print
           sha1 checksum-file
@@ -34,19 +34,18 @@ SYMBOL: collection
     [ second ] collect-by
     ;
 
-CONSTANT: COLLECTION-SAVE "/tmp/collection.fstore"
-
 : save-collection ( -- )
-    collection get COLLECTION-SAVE save-fstore ;
+    collection get COLLECTION get save-fstore ;
 : (restore-collection) ( path -- )
     load-fstore  collection set ;
 : restore-collection ( -- )
-    COLLECTION-SAVE (restore-collection) ; 
+    COLLECTION get (restore-collection) ; 
 
 : filter-entries ( entries -- entries )
-    HERE.S
-    filter-dot-names
-    ;
+    [ is-dot? not ] filter ;
+
+: filter-single-entry ( entries -- entries )
+    [ entries>> length 1  = ] filter ;
 
 : (collect-files) ( path -- )
     to-folder
@@ -82,7 +81,7 @@ CONSTANT: COLLECTION-SAVE "/tmp/collection.fstore"
     ;
 
 : get-collection-entries ( -- )
-    COLLECTION-FOLDER to-folder
+    COLLECTION-FOLDER get to-folder
     folder-entries
     fingerprint-entries
     collection set
@@ -92,12 +91,15 @@ CONSTANT: COLLECTION-SAVE "/tmp/collection.fstore"
     .HERE
     { }  collection get values
     [ [ second suffix ] each ] each
-    [ pathname>> ] collect-by 
+    [ pathnameRead ] collect-by 
 ;
 
 : collection-files ( -- )
     .HERE
     100 count-by
-    COLLECTION-FOLDER collect-files 
+    COLLECTION-FOLDER get collect-files 
     ;
 
+
+        
+    
