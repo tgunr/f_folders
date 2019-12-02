@@ -440,7 +440,10 @@ SYMBOL: COUNTBY
 SYMBOL: ENTRY-COUNT
     
 : count-by ( n -- )   COUNTBY set  0 ENTRY-COUNT set ;
-: +count ( n -- )   ENTRY-COUNT get  +  ENTRY-COUNT set ;
+: +count ( -- )   ENTRY-COUNT get  1+  ENTRY-COUNT set ;
+: .countby ( -- )
+    ENTRY-COUNT get  COUNTBY get  mod 0=
+    [ B ENTRY-COUNT get  HERE. +count ] when ;
     
 : (folder-filter) ( entry -- ? )
     is-dot-dir? not ;
@@ -463,18 +466,16 @@ SYMBOL: FolderFilter
 : (folder-entries) ( folder -- entries )
     typeGet [ +nonexistent-file+ = ] dip  swap
     [ drop { } ]
-    [
-        yield
-        [ pathname ] keep
-        [ 
-            [ (directory-entries) ]
-            [ message>>  ": " prepend  append  print  { } ]
-            recover
-        ] dip
-        [ [ folder-filter ] filter ] dip
-        swap
-        [ over pathname "/" append swap to-folder ] map
-        >>entries entries>>
+    [ yield
+      [ pathname ] keep
+      [ [ (directory-entries) ]
+        [ message>>  ": " prepend  append  print  { } ]
+        recover
+      ] dip
+      [ [ folder-filter ] filter ] dip
+      swap
+      [ over pathname "/" append swap to-folder ] map
+      >>entries entries>>
     ] if
     ;
 
@@ -489,7 +490,7 @@ FROM: string => to-folder-tree ;
       [ dup is-dot-dir? not 
           [ †level get †test-level get <=
             [ †level get 1 + †level set
-              [ pathname to-folder-tree (folder-entries-deep) ] keep 
+              [ .countby pathname to-folder-tree (folder-entries-deep) ] keep 
               swap >>entries
             ] when 
           ] when
@@ -499,19 +500,19 @@ FROM: string => to-folder-tree ;
 
 : (deep-entries) ( entries -- all-entries )
     { } swap
-    [
-        dup is-directory? [
-            [ dup is-dot-dir? not ] retain
-            [ entries>> (deep-entries)
-              nip append
-            ] 
-            [ dup is-dot? 
+    [ dup is-directory? [
+          [ dup is-dot-dir? not ] retain
+          [ .countby
+            entries>> (deep-entries)
+            nip append
+          ] 
+          [ dup is-dot? 
               [ 2drop ]
               [ drop suffix ]
               if
-            ] if
-        ]
-        [ suffix ] if
+          ] if
+      ]
+      [ suffix ] if
     ] each
     ;
         

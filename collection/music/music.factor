@@ -45,6 +45,7 @@ SYMBOL: SINGLES
 
 : do-singles ( -- )
     MUSIC-COLLECTION set-symbols
+    
     (init-singles) ;
 
 : do-singles-new ( -- )

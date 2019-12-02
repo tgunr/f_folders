@@ -49,13 +49,15 @@ SYMBOL: collection
 
 : (collect-files) ( path -- )
     to-folder
-    "Collecting files:" print
+    HERE"Collecting files:"
+
+    B
     deep folder-entries
     HERE" Fingerprinting"
-    [
-     !   dup name>> HERE.
+    B
+    [ ! dup name>> HERE.
         fingerprintGet
-        yield
+        yield .countby
     ] map>alist
     HERE" Collect by"
     [ first ] collect-by
@@ -68,6 +70,13 @@ SYMBOL: collection
     [ "Collect files completed" print ] >>exit-handler ;
 
 : collect-files ( path -- )
+    collection get 
+    [ drop ]
+    [ 100 count-by (collect-files) ]
+    if
+    ;
+
+: collect-files-thread ( path -- )
     collection get 
     [ drop ]
     [ 100 count-by
