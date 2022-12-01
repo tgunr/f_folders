@@ -11,7 +11,7 @@
 
 USING: accessors checksums checksums.adler-32 checksums.fnv1
 classes.tuple combinators continuations file.xattr io io.backend
-io.files io.files.info io.files.links
+io.directories.hierarchy io.files io.files.info io.files.links
 io.streams.c kernel layouts libc locals math math.order
 math.parser namespaces prettyprint.custom regexp sequences
 sorting splitting strings threads unix.ffi unix.users variables
@@ -101,7 +101,7 @@ IN: io.directories
         [ remove-extension "." ] dip 1 +
         number>string 3append
     ] [ ".1" append ] if*
-    dup file-exists?
+    dup exists?
     [ bump-name ] [ ] if
     ;
 
@@ -557,7 +557,7 @@ FROM: string => to-folder-tree ;
         { +directory+ [ pathname escape-string  "open " prepend  system ] }
         { +symbolic-link+ [ path>> escape-string  "open " prepend  system ] }
         { +nonexistent-file+ [ "Not a file" print ] }
-        [ drop  "Can't determine file type" print ]
+        [ drop  "Can't determine file type" HERE. ]
     } case
     drop
     ;
@@ -566,7 +566,8 @@ SYMBOL: ERRORS
  
 : copy-entry  ( from to -- )
     [ [ pathname ] dip  pathname  copy-file-into ]
-    [ error>string print
+    [ error>string
+      HERE.
       { } 2sequence 
       ERRORS get  swap suffix
       ERRORS set
@@ -584,7 +585,8 @@ SYMBOL: ERRORS
 
 : move-entry  ( from to -- )
     [ [ pathname ] dip  pathname  move-file-into ]
-    [ error>string print
+    [ error>string
+      HERE.
       { } 2sequence 
       ERRORS get  swap suffix
       ERRORS set
@@ -602,7 +604,7 @@ SYMBOL: ERRORS
 
 
 : rename-entry ( from to -- )
-    2drop "Unimplemented" print
+    2drop "Unimplemented" HERE.
     ;
 
 : delete-entry ( entry -- )
@@ -616,13 +618,13 @@ SYMBOL: ERRORS
       } case
       +nonexistent-file+ swap type<<
     ]
-    [ error>string print  drop ]
+    [ error>string HERE.  drop ]
     recover
 ;
 
 : delete-entry-tree ( entry -- )
     pathname
-    [ file-exists? ] retain 
+    [ exists? ] retain 
     [ delete-tree ]
     [ drop ]
     if
@@ -631,30 +633,30 @@ SYMBOL: ERRORS
 SYMBOL: (link-entries)
     
 : symlink-entries ( entry1 entry2 -- )
-    over file-exists?
+    over exists?
     [ dup delete-entry
       [ pathname ] bi@
       [ symlink ] 2keep
       pick 0≠
       [ [ " to " append ] dip
         append
-        "ERROR: " prepend  print
+        "ERROR: " prepend  HERE.
         drop
       ]
       [ drop 2drop ]
       if
     ]
-    [ drop  pathname " does not exist: " append  print ]
+    [ drop  pathname " does not exist: " append  HERE. ]
     if
     ;
 
 : hardlink-entries ( entry1 entry2 -- )
-    over file-exists?
+    over exists?
     [ dup delete-entry 
       [ pathname ] bi@
       make-hard-link 
     ]
-    [ drop  pathname " does not exist: " append  print ]
+    [ drop  pathname " does not exist: " append  HERE. ]
     if
     ;
 
@@ -672,7 +674,7 @@ IN: io.directories
     dup file-name
     current-directory get as-directory prepend
     2dup print-linking
-    dup file-exists?
+    dup exists?
     [ dup move-aside ] [ ] if
     [ make-link ]
     [ (move-aside-error) 2drop ]
