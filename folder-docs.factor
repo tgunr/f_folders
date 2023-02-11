@@ -143,7 +143,7 @@ HELP: as-directory
 ;
 
 HELP: special-path?
-{ $values { "path" string } { "rest"string } { "?" boolean } }
+{ $values { "path" string } { "rest" string } { "?" boolean } }
 { $description "Determines if a path is special, e.g. begins with resource: vocab: or ~" }
 { $examples
   { $code 

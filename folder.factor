@@ -11,7 +11,7 @@
 
 USING: accessors checksums checksums.adler-32 checksums.fnv1
 classes.tuple combinators continuations file.xattr io io.backend
-io.directories.hierarchy io.files io.files.info io.files.links
+io.files io.files.info io.files.links
 io.streams.c kernel layouts libc locals math math.order
 math.parser namespaces prettyprint.custom regexp sequences
 sorting splitting strings threads unix.ffi unix.users variables
@@ -101,7 +101,7 @@ IN: io.directories
         [ remove-extension "." ] dip 1 +
         number>string 3append
     ] [ ".1" append ] if*
-    dup exists?
+    dup file-exists?
     [ bump-name ] [ ] if
     ;
 
@@ -360,7 +360,7 @@ M: string to-folder ( path -- folder )
     recover
     [ last-path-component ] dip
     <folder-entry>
-;
+; 
 
 M: string to-folder-tree ( path -- folder )
     to-folder deep ;
@@ -624,7 +624,7 @@ SYMBOL: ERRORS
 
 : delete-entry-tree ( entry -- )
     pathname
-    [ exists? ] retain 
+    [ file-exists? ] retain 
     [ delete-tree ]
     [ drop ]
     if
@@ -633,7 +633,7 @@ SYMBOL: ERRORS
 SYMBOL: (link-entries)
     
 : symlink-entries ( entry1 entry2 -- )
-    over exists?
+    over file-exists?
     [ dup delete-entry
       [ pathname ] bi@
       [ symlink ] 2keep
@@ -651,7 +651,7 @@ SYMBOL: (link-entries)
     ;
 
 : hardlink-entries ( entry1 entry2 -- )
-    over exists?
+    over file-exists?
     [ dup delete-entry 
       [ pathname ] bi@
       make-hard-link 
@@ -674,7 +674,7 @@ IN: io.directories
     dup file-name
     current-directory get as-directory prepend
     2dup print-linking
-    dup exists?
+    dup file-exists?
     [ dup move-aside ] [ ] if
     [ make-link ]
     [ (move-aside-error) 2drop ]

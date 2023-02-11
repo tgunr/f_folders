@@ -51,9 +51,13 @@ SYMBOL: collection
     to-folder
     "Collecting files:" print
     deep folder-entries
-    HERE" Fingerprinting"
+    HERE" Fingerprinting, showing progress every 100 files"
     [
-     !   dup name>> HERE.
+        ENTRY-COUNT inc
+        ENTRY-COUNT get
+        COUNTBY get mod 0 = [  
+            dup name>> HERE.
+        ] when
         fingerprintGet
         yield
     ] map>alist
@@ -68,11 +72,19 @@ SYMBOL: collection
     [ "Collect files completed" print ] >>exit-handler ;
 
 : collect-files ( path -- )
-    collection get 
-    [ drop ]
-    [ 100 count-by
-      [ (collect-files) ] curry "Collect Files" <thread>
-      (collect-files-callback) (spawn)
+    collection get drop f 
+    [ drop
+      "Collection already exists" print 
+    ] 
+    [ COLLECTION get 
+        [ 100 count-by
+          [ (collect-files) ] curry "Collect Files" <thread>
+          (collect-files-callback)
+          (spawn)
+        ]
+        [ drop
+          "COLLECTION IS NOT SET!" print ]
+        if
     ]
     if
     ;

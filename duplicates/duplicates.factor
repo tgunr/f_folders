@@ -106,6 +106,8 @@ SYMBOL: errors  errors [ { } ] initialize
     [ fingerprintRead ] collect-by 
     ;
 
+FROM: folder => pathname ;
+
 : delete&relink ( entry1 entry2 -- )
     dup does-exist?
     [ dup delete-entry ] when
@@ -179,9 +181,9 @@ SYMBOL: dup-size
     ] unless ;
 \ namex dup-process set
 
-: do-dups ( -- )
+: dedup ( -- )
     ! \ delete-dups-in-folder dup-process set
     \ namex dup-process set
-    collection-files collection-dedup
+    collection-dedup
     ;
 
