@@ -17,18 +17,18 @@ FROM: string => to-folder ;
 CONSTANT: MUSIC-FOLDER "/Users/davec/Music/Plex"
 CONSTANT: MUSIC-COLLECTION "/tmp/music.fstore"
 
-SYMBOL: SINGLES
+SYMBOLS: SINGLES COLLECTION-FOLDER ; 
 
 FROM: folder.collection => (restore-collection) ;
 
-: restore-collection ( -- )
-    MUSIC-COLLECTION (restore-collection) ; 
+! : restore-collection ( -- )
+!     MUSIC-COLLECTION (restore-collection) ; 
 
 : (singles) ( -- folder )
     SINGLES get to-folder ;
 
 : set-symbols ( collection -- )
-    COLLECTION set
+    MUSIC-COLLECTION set
     MUSIC-FOLDER COLLECTION-FOLDER set
     "~/Music/Plex/Singles" SINGLES set
     \ not-dot-file? FolderFilter set
