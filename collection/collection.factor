@@ -49,7 +49,9 @@ SYMBOL: collection
 
 : (collect-files) ( path -- )
     to-folder
-    "Collecting files:" print
+    HERE"Collecting files:"
+
+    B
     deep folder-entries
     HERE" Fingerprinting, showing progress every 100 files"
     [
@@ -59,7 +61,7 @@ SYMBOL: collection
             dup name>> HERE.
         ] when
         fingerprintGet
-        yield
+        yield .countby
     ] map>alist
     HERE" Collect by"
     [ first ] collect-by

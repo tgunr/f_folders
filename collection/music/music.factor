@@ -47,6 +47,7 @@ FROM: folder.collection => (restore-collection) ;
 
 : do-singles ( -- )
     MUSIC-COLLECTION set-symbols
+    
     (init-singles) ;
 
 : do-singles-new ( -- )
