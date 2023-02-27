@@ -7,13 +7,14 @@
 
 USING: accessors assocs checksums checksums.sha folder folder.collection io
 continuations io.directories io.files.links io.pathnames kernel layouts locals
-math namespaces prettyprint regexp sequences sequences.extras
-serialize splitting threads words unix.ffi ;
+math namespaces prettyprint prettyprint.config regexp sequences sequences.extras
+serialize splitting threads words unix.ffi
+folder.collection ;
 
 FROM: string => to-folder ;
 IN: folder.duplicates
 
-SYMBOL: duplicates
+SYMBOL: duplicates  
 SYMBOL: errors  errors [ { } ] initialize
 
 : which-to-delete? ( entry entry -- entry )
@@ -42,7 +43,7 @@ SYMBOL: errors  errors [ { } ] initialize
     ] map
     ;
 
-: collection-dups ( -- {dups} )
+: duplicates-from-collection ( -- {dups} )
     ! any element with 2 or more items is possible dup
     collection get
     [ nip
@@ -145,13 +146,25 @@ FROM: folder => pathname ;
     ;
 
 : delete-dups-in-folder ( vector -- )
-      [ (delete-dups-in-folder) ] each ;
+      [ B (delete-dups-in-folder) ] each ;
+
+SYMBOL: dup-size
+0 dup-size set
+:: namex ( v -- )
+    v values :> dups
+    dups empty? [ B
+        dups
+        [ second :> e
+          e name>> .
+          dup-size get
+          e info>> size-on-disk>> +
+          dup-size set  ] each
+    ] unless ;
 
 SYMBOL: dup-process
-\ delete-dups-in-folder dup-process set
 
 ! an array of vectors, each elementis an array of duplicate fingerprints
-: process-dups ( dups -- )
+: process-each-duplicate ( dups -- )
     HERE.S
     [ 
       [ second pathRead ] collect-by
@@ -160,30 +173,28 @@ SYMBOL: dup-process
     ] each 
     ;
 
-: collection-dedup ( -- )
+: process ( -- )
     .HERE
     duplicates-by-folder
-    collection-dups process-dups
-    symlink-dups
+    duplicates-from-collection
+    process-each-duplicate
     ;
 
-SYMBOL: dup-size
-0 dup-size set
-:: namex ( v -- )
-    v values :> dups
-    dups empty? [
-        dups
-        [ second :> e
-          e name>> .
-          dup-size get
-          e info>> size-on-disk>> +
-          dup-size set  ] each
-    ] unless ;
-\ namex dup-process set
+: do-process ( process -- )
+    dup-process set  process ;
 
-: dedup ( -- )
-    ! \ delete-dups-in-folder dup-process set
-    \ namex dup-process set
-    collection-dedup
-    ;
+: delete-in-folder ( -- )
+    \ delete-dups-in-folder do-process ;
 
+: show-size ( -- )
+    \ namex  do-process ;
+
+
+: print-duplicates ( -- )
+    duplicates-from-collection
+    [ [ [ second [ path>> ] keep
+          name>> append  pprint nl
+        ] without-limits
+      ] each nl
+    ] each  
+    ;        
