@@ -47,9 +47,9 @@ SYMBOL: collection
 : filter-single-entry ( entries -- entries )
     [ entries>> length 1  = ] filter ;
 
-: (collect-files) ( path -- )
+: (fingerprint) ( path -- )
     to-folder
-    "Collecting files:" print
+    HERE"Fingerprinting files:"
     deep folder-entries
     HERE" Fingerprinting, showing progress every 100 files"
     [
@@ -68,23 +68,43 @@ SYMBOL: collection
     save-collection
     ;
 
-: (collect-files-callback) ( thread -- thread )
-    [ "Collect files completed" print ] >>exit-handler ;
+: (fingerprint-callback) ( thread -- thread )
+    [ "Fingerprint files completed" print ] >>exit-handler ;
 
-: collect-files ( path -- )
-    collection get drop f 
-    [ drop
-      "Collection already exists" print 
-    ] 
-    [ COLLECTION get 
+: path-fingerprint ( path -- )
+    COLLECTION-FOLDER set
+    collection get 
+    [ "collection already exists" print ] 
+    [ COLLECTION-FOLDER get  dup 
         [ 100 count-by
-          [ (collect-files) ] curry "Collect Files" <thread>
-          (collect-files-callback)
+          [ (fingerprint) ] curry "Collect Files" <thread>
+          (fingerprint-callback)
           (spawn)
         ]
         [ drop
           "COLLECTION IS NOT SET!" print ]
         if
+    ]
+    if
+    ;
+
+: (collect) ( path -- )
+    to-folder
+    HERE" Collecting files:"
+    deep folder-entries
+    collection set
+    HERE" Save collection"
+    save-collection
+    ;
+
+: path-collect ( path -- )
+    COLLECTION-FOLDER set
+    collection get 
+    [ "collection already exists" print ] 
+    [ COLLECTION-FOLDER get  dup 
+      [ (collect) ] 
+      [ drop  "COLLECTION-FOLDER IS NOT SET!" print ]
+      if
     ]
     if
     ;
