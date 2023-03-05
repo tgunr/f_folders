@@ -9,16 +9,17 @@
 ! Copyright (C) 2011 PolyMicro Systems.
 ! See http://polymicrosystems.com/license for license details.
 
-USING: accessors checksums checksums.adler-32 checksums.fnv1
-classes.tuple combinators continuations file.xattr io io.backend
-io.files io.files.info io.files.links
-io.streams.c kernel layouts libc locals math math.order
+USING: accessors assocs checksums checksums.adler-32
+checksums.fnv1 classes.tuple combinators continuations
+file.xattr io io.backend io.files io.files.info io.files.links
+io.streams.c kernel layouts libc locals make math math.order
 math.parser namespaces prettyprint.custom regexp sequences
 sorting splitting strings threads unix.ffi unix.users variables
-file.xattr words ;
+words ;
 
 IN: strings
 : space? ( ch -- ? ) 32 = ;
+
 : tab? ( ch -- ? ) 9 = ;
 
 : trim-whitespace ( str -- str' )
@@ -33,6 +34,36 @@ IN: strings
     "'" dup surround ;
 
 IN: io.pathnames
+: soft-quote ( string -- string' )
+    "\"" dup surround ;
+
+: hard-quote ( string -- string' )
+    "'" dup surround ;
+
+: escape-string-by ( str table -- escaped )
+    ! Convert $ ( ) ' and " to shell escapes
+    [ '[ [ _ at ] [ % ] [ , ] ?if ] each ] "" make ; inline
+
+CONSTANT: PATH_ESCAPE_CHARS H{
+       { CHAR: \s "\\ "  }
+       { CHAR: \n "?"    }
+       { CHAR: (  "\\("  }
+       { CHAR: )  "\\)"  }
+       { CHAR: &  "\\&"  }
+       { CHAR: $  "\\$"  }
+       { CHAR: ;  "\\;"  }
+       { CHAR: "  "\""   }      ! for editor's sake "
+       { CHAR: '  "\\'"  } 
+       { CHAR: `  "\\`"  }
+       }
+       
+: escape-string ( str -- str' )
+    PATH_ESCAPE_CHARS escape-string-by ;
+    ! [ dup
+    !   [ PATH_ESCAPE_CHARS at ] [ nip ] [ drop 1string ] ?if
+    ! ] { } map-as
+    ! "" join ; 
+
 : components-to-path ( seq -- path )
     "/" join
     ;
