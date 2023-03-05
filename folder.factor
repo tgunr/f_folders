@@ -15,7 +15,7 @@ io.files io.files.info io.files.links
 io.streams.c kernel layouts libc locals math math.order
 math.parser namespaces prettyprint.custom regexp sequences
 sorting splitting strings threads unix.ffi unix.users variables
-words ;
+file.xattr words ;
 
 IN: strings
 : space? ( ch -- ? ) 32 = ;
