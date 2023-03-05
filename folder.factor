@@ -412,8 +412,8 @@ M: folder-entry hashcode*
 : fingerprint-entries ( entries -- entries )
     [ fingerprintGet nip ] map ;
 
-: fingerprint-sort ( entries -- entries )
-    [ fingerprintRead [ fingerprintRead ] dip  <=> ] sort ;
+! : fingerprint-sort ( entries -- entries )
+!     [ fingerprintRead [ fingerprintRead ] dip  <=> ] sort-by ;
 
 : spotcheck-entry ( entry -- entry )
     dup
@@ -443,7 +443,7 @@ SYMBOL: ENTRY-COUNT
 : +count ( -- )   ENTRY-COUNT get  1+  ENTRY-COUNT set ;
 : .countby ( -- )
     ENTRY-COUNT get  COUNTBY get  mod 0=
-    [ B ENTRY-COUNT get  HERE. +count ] when ;
+    [ ENTRY-COUNT get  HERE. +count ] when ;
     
 : (folder-filter) ( entry -- ? )
     is-dot-dir? not ;

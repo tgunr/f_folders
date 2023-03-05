@@ -6,7 +6,7 @@
 ! See http://factorcode.org/license.txt for BSD license.
 
 USING: accessors assocs checksums checksums.sha continuations folder
-folder.collection.music io io.directories io.files.links io.pathnames
+io io.directories io.files.links io.pathnames
 kernel layouts locals math namespaces prettyprint regexp sequences
 sequences.extras serialize splitting threads unix.ffi words ;
 
@@ -14,7 +14,6 @@ IN: folder.collection
 FROM: string => to-folder ;
 
 SYMBOL: COLLECTION-FOLDER 
-SYMBOL: COLLECTION
 SYMBOL: collection
 
 : name. ( entry -- entry )
@@ -34,12 +33,18 @@ SYMBOL: collection
 !     [ second ] collect-by
 !     ;
 
+: collection-file ( -- path )
+    COLLECTION-FOLDER get
+    "/collection.save" append ;
+
 : save-collection ( -- )
-    collection get COLLECTION get save-fstore ;
+    collection get collection-file save-fstore ;
+ 
 : (restore-collection) ( path -- )
     load-fstore  collection set ;
+
 : restore-collection ( -- )
-    COLLECTION get (restore-collection) ; 
+   collection-file (restore-collection) ; 
 
 : filter-entries ( entries -- entries )
     [ is-dot? not ] filter ;
@@ -50,8 +55,6 @@ SYMBOL: collection
 : (collect-files) ( path -- )
     to-folder
     HERE"Collecting files:"
-
-    B
     deep folder-entries
     HERE" Fingerprinting, showing progress every 100 files"
     [
@@ -74,18 +77,16 @@ SYMBOL: collection
     [ "Collect files completed" print ] >>exit-handler ;
 
 : collect-files ( path -- )
-    collection get drop f 
-    [ drop
-      "Collection already exists" print 
-    ] 
-    [ COLLECTION get 
+    COLLECTION-FOLDER set
+    collection get 
+    [ "collection already exists" print ] 
+    [ COLLECTION-FOLDER get  dup 
         [ 100 count-by
           [ (collect-files) ] curry "Collect Files" <thread>
           (collect-files-callback)
           (spawn)
         ]
-        [ drop
-          "COLLECTION IS NOT SET!" print ]
+        [ drop  "COLLECTION-FOLDER IS NOT SET!" print ]
         if
     ]
     if

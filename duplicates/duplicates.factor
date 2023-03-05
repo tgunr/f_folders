@@ -8,12 +8,13 @@
 USING: accessors assocs checksums checksums.sha folder folder.collection io
 continuations io.directories io.files.links io.pathnames kernel layouts locals
 math namespaces prettyprint regexp sequences sequences.extras
-serialize splitting threads words unix.ffi ;
+serialize splitting threads words unix.ffi
+folder.collection ;
 
 FROM: string => to-folder ;
 IN: folder.duplicates
 
-SYMBOL: duplicates
+SYMBOLS: duplicates collection ; 
 SYMBOL: errors  errors [ { } ] initialize
 
 : which-to-delete? ( entry entry -- entry )
@@ -145,10 +146,22 @@ FROM: folder => pathname ;
     ;
 
 : delete-dups-in-folder ( vector -- )
-      [ (delete-dups-in-folder) ] each ;
+      [ B (delete-dups-in-folder) ] each ;
+
+SYMBOL: dup-size
+0 dup-size set
+:: namex ( v -- )
+    v values :> dups
+    dups empty? [
+        dups
+        [ second :> e
+          e name>> .
+          dup-size get
+          e info>> size-on-disk>> +
+          dup-size set  ] each
+    ] unless ;
 
 SYMBOL: dup-process
-\ delete-dups-in-folder dup-process set
 
 ! an array of vectors, each elementis an array of duplicate fingerprints
 : process-dups ( dups -- )
@@ -164,26 +177,11 @@ SYMBOL: dup-process
     .HERE
     duplicates-by-folder
     collection-dups process-dups
-    symlink-dups
     ;
 
-SYMBOL: dup-size
-0 dup-size set
-:: namex ( v -- )
-    v values :> dups
-    dups empty? [
-        dups
-        [ second :> e
-          e name>> .
-          dup-size get
-          e info>> size-on-disk>> +
-          dup-size set  ] each
-    ] unless ;
-\ namex dup-process set
-
 : dedup ( -- )
-    ! \ delete-dups-in-folder dup-process set
-    \ namex dup-process set
+    \ delete-dups-in-folder dup-process set
+    ! \ namex dup-process set
     collection-dedup
     ;
 
