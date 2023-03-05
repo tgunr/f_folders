@@ -4,17 +4,16 @@
 ! Description: Operations on collections of folders/files
 ! Copyright (C) 2019 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
-
-USING: accessors assocs checksums checksums.sha continuations folder
-io io.directories io.files.links io.pathnames
-kernel layouts locals math namespaces prettyprint regexp sequences
-sequences.extras serialize splitting threads unix.ffi words ;
+USING: accessors assocs checksums checksums.sha continuations
+folder io io.backend io.directories io.files.links io.pathnames
+kernel layouts locals math namespaces prettyprint regexp
+sequences sequences.extras serialize splitting threads unix.ffi
+words ;
 
 IN: folder.collection
 FROM: string => to-folder ;
 
 SYMBOL: COLLECTION-FOLDER 
-SYMBOL: COLLECTION
 SYMBOL: collection
 
 : name. ( entry -- entry )
@@ -34,14 +33,20 @@ SYMBOL: collection
 !     [ second ] collect-by
 !     ;
 
+: collection-path ( -- path )
+    COLLECTION-FOLDER get
+    "/collection.save" append  normalize-path ;
+
 : save-collection ( -- )
-    collection get COLLECTION get save-fstore ;
+    collection get collection-path save-fstore ;
+ 
 : (restore-collection) ( path -- )
     load-fstore  collection set ;
-: restore-collection ( -- )
-    COLLECTION get (restore-collection) ; 
 
-: filter-entries ( entries -- entries )
+: restore-collection ( -- )
+   collection-path (restore-collection) ; 
+
+: not-hidden ( entries -- entries )
     [ is-dot? not ] filter ;
 
 : filter-single-entry ( entries -- entries )
