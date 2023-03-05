@@ -109,6 +109,9 @@ SYMBOL: collection
     if
     ;
 
+: path-collect! ( path -- )
+    f collection set  path-collect ;
+
 : get-collection-entries ( -- )
     COLLECTION-FOLDER get to-folder
     folder-entries

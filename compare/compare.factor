@@ -2,7 +2,7 @@
 ! See http://factorcode.org/license.txt for BSD license.
 USING: accessors checksums checksums.sha classes combinators
 folder help.syntax io io.backend io.directories
-io.directories.hierarchy io.pathnames kernel locals namespaces
+io.pathnames kernel locals namespaces
 regexp regexp.combinators sequences sets strings
 tools.continuations ;
 
