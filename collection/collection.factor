@@ -6,7 +6,7 @@
 ! See http://factorcode.org/license.txt for BSD license.
 
 USING: accessors assocs checksums checksums.sha continuations folder
-folder.collection.music io io.directories io.files.links io.pathnames
+io io.directories io.files.links io.pathnames
 kernel layouts locals math namespaces prettyprint regexp sequences
 sequences.extras serialize splitting threads unix.ffi words ;
 
