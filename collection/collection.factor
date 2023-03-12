@@ -94,11 +94,11 @@ SYMBOL: collection
     ;
 
 : (collect) ( path -- )
-    to-folder
-    HERE" Collecting files:"
-    deep folder-entries
+    to-folder-tree
+    "Collecting files" print
+    folder-entries
     collection set
-    HERE" Save collection"
+    "Saving collection" print
     save-collection
     ;
 
