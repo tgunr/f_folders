@@ -9,7 +9,7 @@ USING: accessors assocs checksums checksums.sha folder folder.collection io
 continuations io.directories io.files.links io.pathnames kernel layouts locals
 math namespaces prettyprint prettyprint.config regexp sequences sequences.extras
 serialize splitting threads words unix.ffi
-folder.collection ;
+ ;
 
 FROM: string => to-folder ;
 IN: folder.duplicates
@@ -31,7 +31,7 @@ SYMBOL: errors  errors [ { } ] initialize
         [ ! { entry fingerprint }
             first ! entry
             dup pathnameRead
-            dup print yield
+            dup print-path yield
             sha1 checksum-file ! entry fingerprint
             >>fingerprint ! entry
             [ fingerprint>> ] keep ! fingerprint entry
@@ -43,13 +43,13 @@ SYMBOL: errors  errors [ { } ] initialize
     ] map
     ;
 
+FROM: folder.collection  => collection ;
 : duplicates-from-collection ( -- {dups} )
     ! any element with 2 or more items is possible dup
     collection get
     [ nip
       length 2 >=
     ] assoc-filter
-    values
     ;
 
 : remove-entry ( entry -- )
@@ -94,7 +94,7 @@ SYMBOL: errors  errors [ { } ] initialize
 
 : .dupFolder ( folder -- )
     "Deleting duplicates in folder: " pprint
-    pathRead print ;
+    pathRead print-path ;
 
 : duplicates-by-folder ( -- )
     .HERE
@@ -112,24 +112,16 @@ FROM: folder => pathname ;
 : delete&relink ( entry1 entry2 -- )
     dup does-exist?
     [ dup delete-entry ] when
-    ".... " over pathname append print
+    ".... " over pathname append print-path
     hardlink-entries
     ;
 
-: symlink-dups ( -- )
-    duplicates-by-fingerprint
-    [ nip length 2 >= ] assoc-filter values 
-    [
-        unclip
-        "Symlink to: " over pathnameRead append print
-        swap
-        [ over swap
-          [ pathnameRead ] bi@
-          dup pprint ": " pprint
-          dup delete-file
-          link .
-        ] each
-        drop
+:: hardlink ( dups -- )
+    dups unclip second :> src
+    "    From: " src pathnameRead append print-path 
+    [ second
+        "Symlink: " over pathnameRead append print-path
+        src  swap hardlink-entries
     ] each
     ;
 
@@ -165,36 +157,31 @@ SYMBOL: dup-process
 
 ! an array of vectors, each elementis an array of duplicate fingerprints
 : process-each-duplicate ( dups -- )
-    HERE.S
-    [ 
-      [ second pathRead ] collect-by
-      values  [ length 2 >= ] filter
-      dup-process get execute( x -- )
-    ] each 
-    ;
+    [ dup-process get execute( x -- ) ] each ;
 
 : process ( -- )
     .HERE
-    duplicates-by-folder
-    duplicates-from-collection
+    duplicates-from-collection dup
+    duplicates set  values
     process-each-duplicate
     ;
 
 : do-process ( process -- )
     dup-process set  process ;
 
-: delete-in-folder ( -- )
+: delete-in-folder-dups ( -- )
     \ delete-dups-in-folder do-process ;
 
-: show-size ( -- )
-    \ namex  do-process ;
+: show-size-dups ( -- )
+    \ namex do-process ;
 
+: hardlink-dups ( -- )
+    \ hardlink do-process ; 
 
 : print-duplicates ( -- )
-    duplicates-from-collection
-    [ [ [ second [ path>> ] keep
-          name>> append  pprint nl
-        ] without-limits
+    duplicates-from-collection values
+    [ [ second [ path>> ] keep
+        name>> append  print-path 
       ] each nl
     ] each  
     ;        

@@ -9,13 +9,24 @@
 ! Copyright (C) 2011 PolyMicro Systems.
 ! See http://polymicrosystems.com/license for license details.
 
-USING: accessors assocs checksums checksums.adler-32
-checksums.fnv1 classes.tuple combinators continuations
-file.xattr io io.backend io.files io.files.info io.files.links
-io.streams.c kernel layouts libc locals make math math.order
-math.parser namespaces prettyprint.custom regexp sequences
+USING: accessors checksums checksums.adler-32 checksums.fnv1
+classes.tuple combinators continuations file.xattr io io.backend
+io.files io.files.info io.files.links
+io.streams.c kernel layouts libc locals math math.order
+math.parser namespaces prettyprint prettyprint.config prettyprint.custom regexp sequences
 sorting splitting strings threads unix.ffi unix.users variables
-words ;
+words debugger ; 
+
+IN: folder
+
+:: trunc-path ( seq -- 'seq )
+    length-limit get :> ll
+    seq dup length ll >
+    [ ll 2 /i [ 1 - head ] [ tail* ] 2bi "…" glue ]
+    when ;
+   
+: print-path ( seq -- )
+    trunc-path ... ;
 
 IN: strings
 : space? ( ch -- ? ) 32 = ;
@@ -140,7 +151,7 @@ IN: io.directories
     "move-aside: Error: " over errno>>
       number>string append
       " " append over args>> first append
-      " " append swap args>> second append print
+      " " append swap args>> second append print-path
 ;
 
 : remove-acl ( path -- )
@@ -233,7 +244,6 @@ DEFER: pathnameGet
 : typeWrite ( type entry -- )   type<< ; 
 : infoWrite ( info entry -- )   info<< ; 
 : xattrsWrite ( xattrs entry -- )   xattrs<< ;
-: fingerprintWrite ( fingerprint entry -- )   fingerprint<< ;
 
 : nameGet ( entry -- name entry )
     [ name>> ] keep ;
@@ -251,60 +261,8 @@ DEFER: pathnameGet
     [ xattrsRead ] keep ;
 : entriesGet ( entry -- entries entry )
     [ entries>> ] keep ;
-DEFER: fingerprintRead
-: fingerprintGet ( entry -- fingerprint entry )
-    [ fingerprintRead ] keep ;
 
-: fingerprint? ( entry -- ? )
-    fingerprintRead >boolean ;
-         
-: fingerprintKey@ ( -- key )
-    BUNDLEID "checksum.fnv1-32" append ;
-
-:: fingerprint-xattrStore ( fingerprint entry -- )
-    fingerprintKey@  entry fingerprintRead  <xattr>
-    entry pathnameRead  
-    xattrStore
-    entry xattrsRead drop ; 
-
-:: fingerprint-xattrGet ( entry -- fingerprint )
-    f :> fp!
-    entry xattrsRead  ! list of xattrs
-    [ entry xattrsRead
-      [ name>> fingerprintKey@ = ] filter :> {xattrs} 
-      {xattrs} empty? not
-      [ {xattrs} first  value>> fp!
-        fp entry fingerprintWrite
-      ] when
-    ] when
-    fp
-!    dup HERE.
-    ;
-
-:: fingerprint-xattrSet ( entry -- entry )
-    entry type>> +regular-file+ = [
-        entry pathnameRead fnv1-32 checksum-file :> fp
-        fp entry  [ fingerprintWrite ] [ fingerprint-xattrStore ] 2bi
-    ] when
-    entry
-!    fp HERE.
-    ;
-
-:: fingerprintRead ( entry -- fingerprint )  ! Read fingerprint
-    entry fingerprint>> :> fp!
-    fp
-    [ entry fingerprint-xattrGet fp!  ! look in xattrs
-      fp
-      [ entry fingerprint-xattrSet fingerprint>> fp! ]  ! not found, go create
-      unless
-    ]
-    unless
-    fp
- !   fp HERE.
-    ;
-
-   
-: does-exist? ( entry -- ? )
+    : does-exist? ( entry -- ? )
     type>> +nonexistent-file+ ≠ ;
 
 : is-directory? ( entry -- ? )
@@ -426,12 +384,6 @@ GENERIC: pathname ( folder-entry -- path )
 M: folder-entry pathname
     pathnameRead ; 
 
-M: folder-entry equal?
-    [ fingerprintRead ] bi@ = ;
-
-M: folder-entry hashcode*
-    nip fingerprintRead ;
-
 : error>string ( error -- string )
     "ERROR: "
     over args>> first append
@@ -440,34 +392,13 @@ M: folder-entry hashcode*
     " word: " append  swap  word>> name>> append
 ;
       
-: fingerprint-entries ( entries -- entries )
-    [ fingerprintGet nip ] map ;
-
-! : fingerprint-sort ( entries -- entries )
-!     [ fingerprintRead [ fingerprintRead ] dip  <=> ] sort-by ;
-
-: spotcheck-entry ( entry -- entry )
-    dup
-    pathname "r" fopen >>fingerprint
-    B{ }
-    [ over fingerprint>> fgetc
-      f over ≠ swap
-      over [ rot swap suffix
-             [ dup fingerprint>> 100000 1 rot fseek ] 2dip swap
-           ]
-      [ drop ] if
-    ] loop
-    adler-32 checksum-bytes
-    over fingerprint>> fclose
-    >>fingerprint ;
-
 FROM: io.pathnames => absolute-path ;
 M: folder-entry absolute-path pathname absolute-path ;
 
 FROM: io.directories => (directory-entries) to-folder ;
 
 SYMBOL: †level
-SYMBOL: COUNTBY
+INITIALIZED-SYMBOL: COUNTBY [ 1000 ] 
 SYMBOL: ENTRY-COUNT
     
 : count-by ( n -- )   COUNTBY set  0 ENTRY-COUNT set ;
@@ -502,7 +433,7 @@ SYMBOL: FolderFilter
         [ pathname ] keep
         [ 
             [ (directory-entries) ]
-            [ message>>  ": " prepend  append  print  { } ]
+            [ message>>  ": " prepend  append  print-path  { } ]
             recover
         ] dip
         [ [ folder-filter ] filter ] dip
@@ -590,7 +521,7 @@ FROM: string => to-folder-tree ;
         { +regular-file+ [ path>> escape-string  "open " prepend  system ] }
         { +directory+ [ pathname escape-string  "open " prepend  system ] }
         { +symbolic-link+ [ path>> escape-string  "open " prepend  system ] }
-        { +nonexistent-file+ [ "Not a file" print ] }
+        { +nonexistent-file+ [ "Not a file" print-path ] }
         [ drop  "Can't determine file type" HERE. ]
     } case
     drop
@@ -685,13 +616,20 @@ SYMBOL: (link-entries)
     ;
 
 : hardlink-entries ( entry1 entry2 -- )
-    over file-exists?
-    [ dup delete-entry 
-      [ pathname ] bi@
-      make-hard-link 
-    ]
-    [ drop  pathname " does not exist: " append  HERE. ]
-    if
+    over type>> +symbolic-link+ = not [ 
+        dup file-exists?
+        [ dup delete-entry 
+          [ pathname ] bi@
+          [ make-hard-link ]
+          [    "Error: " over errno>> number>string append
+               " " append over args>> first append " " append
+               swap args>> second append print-path 
+               2drop ]
+          recover
+        ]
+        [ nip  "dst does not exist: " swap pathname append  print-path ]
+        if
+    ] [ drop  "src is symlink!: " swap pathname append  print-path ] if
     ;
 
 M: folder-entry pprint* pprint-object ;
@@ -699,8 +637,8 @@ M: folder-entry pprint* pprint-object ;
 IN: io.directories
 
 : print-linking ( path1 path2 -- )
-    swap "link: " prepend print
-    "  to: " prepend print
+    swap "link: " prepend print-path
+    "  to: " prepend print-path
 ;
 
 : link-to-current-directory ( path -- )
