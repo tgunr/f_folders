@@ -5,13 +5,11 @@
 ! Copyright (C) 2017 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
 
-USING: accessors assocs checksums checksums.sha folder folder.collection io
+USING: accessors assocs checksums checksums.sha folder io
 continuations io.directories io.files.links io.pathnames kernel layouts locals
 math namespaces prettyprint prettyprint.config regexp sequences sequences.extras
-serialize splitting threads words unix.ffi
- ;
-
-FROM: string => to-folder ;
+serialize splitting threads words unix.ffi ;
+FROM: string => >folder ;
 IN: folder.duplicates
 
 SYMBOL: duplicates  
@@ -43,7 +41,8 @@ SYMBOL: errors  errors [ { } ] initialize
     ] map
     ;
 
-FROM: folder.collection  => collection ;
+USE: folder.collection
+! FROM: folder.collection => collection ;
 : duplicates-from-collection ( -- {dups} )
     ! any element with 2 or more items is possible dup
     collection get

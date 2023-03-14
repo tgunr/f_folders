@@ -1,10 +1,10 @@
 ! Copyright (C) 2019 Dave Carlton.
 ! See http://factorcode.org/license.txt for BSD license.
 USING: combinators folder io io.directories
-io.directories.hierarchy io.encodings.utf8
+io.encodings.utf8
 io.files io.files.temp io.pathnames kernel libc
-locals namespaces sequences strings
-tools.deploy.libraries.unix tools.test ;
+locals namespaces sequences string strings accessors
+tools.test ;
 
 IN: folder.tests
 
@@ -14,7 +14,7 @@ DEFER: testfolder-init
 :: testfolder-delete ( -- )
     testfolder get :> tf
     tf
-    [ tf ?exists
+    [ tf file-exists?
       [ tf delete-tree  tf make-directories ]
       [ tf make-directories ]
       if
@@ -76,18 +76,18 @@ CONSTANT: f2 "resource:work/folder/test/test2"
 
 [ "trimmed" ] [ " trimmed " trim-whitespace ] unit-test
 [ "a/b/c" ] [ { "a" "b" "c" } components-to-path ] unit-test
-[ "/path/folder/" ] [ "folder/" as-directory ] unit-test
-[ "/path/folder" ] [ "folder/" as-directory ] unit-test
-[ "/path/file/" ] [ "file" as-directory ] unit-test
-[ "/path/file" ] [ "file" as-directory ] unit-test
-[ t ] [ "resource:test/file" special-path? ] unit-test 
-[ t ] [ "vocab:test/file" special-path? ] unit-test 
-[ t ] [ "~test/file" special-path? ] unit-test 
-[ f ] [ "test/file" special-path? ] unit-test 
+[ "folder/" ] [ "folder" as-directory ] unit-test
+[ "folder/" ] [ "folder/" as-directory ] unit-test
+[ "/path/file/" ] [ "/path/file" as-directory ] unit-test
+[ "/path/file/" ] [ "/path/file/" as-directory ] unit-test
+[ "test/file" t ] [ "resource:test/file" special-path? ] unit-test 
+[ "test/file" t ] [ "vocab:test/file" special-path? ] unit-test 
+[ "test/file" t ] [ "~test/file" special-path? ] unit-test 
+[ "test/file" f ] [ "test/file" special-path? ] unit-test 
 
 ! Try the basic first
-[ t ] [ testfolder-init testfolder get ?exists f = not ] unit-test
-[ {
+[ t ] [ testfolder-init testfolder get file-exists? f = not ] unit-test
+[ V{
     "test1"
     "test1/a"
     "test1/a/a-file"
@@ -108,5 +108,25 @@ CONSTANT: f2 "resource:work/folder/test/test2"
     "test2/a/a-file"
     "test2/b"
     "test2/b/b-file"
-    } ] [ create-abcd-folders  testfolder get  directory-tree-files ] unit-test
+    } ]
+[ create-abcd-folders
+  testfolder get set-current-directory
+  "./" recursive-directory-files 
+] unit-test
+
+[ {
+    "a-file"
+    "c-file"
+    "b-file"
+    "d-file"
+    "c-file"
+    "b-file"
+    "a-file"
+    "b-file"
+    } ]
+[ testfolder get >folder-tree
+  entries>>  [ name>> ] map
+] unit-test
+
+
 

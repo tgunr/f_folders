@@ -6,11 +6,12 @@
 ! See http://factorcode.org/license.txt for BSD license.
 
 USING: accessors assocs checksums checksums.adler-32
-checksums.fnv1 file.xattr folder.collection io io.files.types
+checksums.fnv1 file.xattr folder folder.collection io io.files.types
 io.streams.c kernel math math.parser namespaces prettyprint
 random sequences threads words ;
 IN: folder.fingerprint
 
+SYMBOLS: FINGERPRINT-FOLDER fingerprints ;
 TUPLE: fingerprint checksum date ;
 
 : <fingerprint> ( checksum date -- <fingerprint> )
@@ -103,10 +104,9 @@ IN: folder.fingerprint
     over fingerprint>> fclose
     >>fingerprint ;
 
-FROM: string => to-folder ;
-FROM: folder.collection => collection ; 
+FROM: string => >folder ;
 : (fingerprint) ( path -- )
-    to-folder
+    >folder
     HERE"Fingerprinting files:"
     deep folder-entries
     HERE" Fingerprinting, showing progress every 100 files"
@@ -121,17 +121,17 @@ FROM: folder.collection => collection ;
     ] map>alist
     HERE" Collect by"
     [ first ] collect-by
-    collection set
+    fingerprints set
     ;
 
 : (fingerprint-callback) ( thread -- thread )
     [ "Fingerprint files completed" print ] >>exit-handler ;
 
 : path-fingerprint ( path -- )
-    COLLECTION-FOLDER set
-    collection get 
+    FINGERPRINT-FOLDER set
+    fingerprints get 
     [ "collection already exists" print ] 
-    [ COLLECTION-FOLDER get  dup 
+    [ FINGERPRINT-FOLDER get  dup 
       [ [ (fingerprint) ] curry "Collect Files" <thread>
         (fingerprint-callback)
         (spawn)
@@ -145,7 +145,7 @@ FROM: folder.collection => collection ;
     ;
 
 : path-fingerprint! ( path -- )
-    f collection set  path-fingerprint ; 
+    f fingerprints set  path-fingerprint ; 
 
 : by-fingerprint ( collection -- collection )
     values fingerprint-entries

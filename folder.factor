@@ -9,13 +9,13 @@
 ! Copyright (C) 2011 PolyMicro Systems.
 ! See http://polymicrosystems.com/license for license details.
 
-USING: accessors checksums checksums.adler-32 checksums.fnv1
-classes.tuple combinators continuations file.xattr io io.backend
-io.files io.files.info io.files.links
-io.streams.c kernel layouts libc locals math math.order
-math.parser namespaces prettyprint prettyprint.config prettyprint.custom regexp sequences
-sorting splitting strings threads unix.ffi unix.users variables
-words debugger ; 
+USING: accessors assocs checksums checksums.adler-32
+checksums.fnv1 classes.tuple combinators continuations debugger
+file.xattr io io.backend io.files io.files.info io.files.links
+io.streams.c kernel layouts libc locals make math math.order
+math.parser namespaces prettyprint prettyprint.config
+prettyprint.custom regexp sequences sorting splitting strings
+threads unix.ffi unix.users variables words ;
 
 IN: folder
 
@@ -331,7 +331,7 @@ DEFER: pathnameGet
 : notdeep ( entry -- entry )  f >>depth ;
 
 : is-dot? ( entry -- ? )
-    name>> { "." ".." } member? ;
+    name>> first  CHAR: . = ;
 
 : starts-with-dot? ( entry -- ? )
     R/ ^\..*/ swap name=~? ;
@@ -339,45 +339,53 @@ DEFER: pathnameGet
 : is-dot-dir? ( entry -- ? )
     [ is-directory? ] keep  is-dot?  and ;
 
+DEFER: folder-entries
+    
 IN: string
-GENERIC: to-folder ( path -- folder )
-GENERIC: to-folder-tree ( path -- folder )
+GENERIC: >folder ( path -- folder )
+GENERIC: >folder-tree ( path -- folder )
 
-M: string to-folder ( path -- folder )
+FROM: folder => folder-entries ;
+    
+M: string >folder ( path -- folder )
     dup [ link-info ]
     [ nip drop f ]
     recover
     [ last-path-component ] dip
     <folder-entry>
+    [ folder-entries ] keep  swap >>entries
 ; 
 
-M: string to-folder-tree ( path -- folder )
-    to-folder deep ;
+M: string >folder-tree ( path -- folder )
+    >folder deep
+    [ folder-entries ] keep  swap >>entries ;
     
-IN: folder
-: string-to-folder ( path -- folder )
-    to-folder ; ! Uses string to-folder from above
+! IN: folder
+! : >folder ( path -- folder )
+!     >folder ; ! Uses string >folder from above
 
-: string-to-folder-tree ( path -- folder )
-    to-folder-tree ; ! Uses string to-folder-deep from above
+! : >folder-tree ( path -- folder )
+!     >folder-tree ; ! Uses string >folder-deep from above
 
 IN: io.directories
-GENERIC: to-folder ( path directory-entry -- folder )
-GENERIC: to-folder-tree ( path directory-entry -- folder )
+GENERIC: entry>folder ( path directory-entry -- folder )
+GENERIC: entry>folder-tree ( path directory-entry -- folder )
 
-M: directory-entry to-folder 
+: (entry-folder) ( path directory-entry -- folder )
     tuple-slots
-    swap normalize-path suffix
+    swap normalize-path
+    [ suffix ] keep
+    link-info suffix 
     folder-entry prefix
     >tuple
-;
+    ;
+    
+M: directory-entry entry>folder 
+    (entry-folder) ;
 
-M: directory-entry to-folder-tree
-    tuple-slots
-    swap normalize-path suffix
-    folder-entry prefix
-    >tuple deep
-;
+M: directory-entry entry>folder-tree
+    (entry-folder) deep ; 
+
 
 IN: folder
 GENERIC: pathname ( folder-entry -- path )
@@ -395,7 +403,7 @@ M: folder-entry pathname
 FROM: io.pathnames => absolute-path ;
 M: folder-entry absolute-path pathname absolute-path ;
 
-FROM: io.directories => (directory-entries) to-folder ;
+FROM: io.directories => (directory-entries) entry>folder ;
 
 SYMBOL: †level
 INITIALIZED-SYMBOL: COUNTBY [ 1000 ] 
@@ -411,16 +419,17 @@ SYMBOL: ENTRY-COUNT
     is-dot-dir? not ;
 
 : not-dot-file? ( entry -- ? )
-    [ is-dot-dir? not ] keep
-    starts-with-dot? not
-    and
-    ;
+    is-dot? not ;
     
-SYMBOL: FolderFilter
+SYMBOL: FOLDERFILTER
 
 : folder-filter ( entry -- ? )
-    FolderFilter get dup
-    [ execute( entry -- ? ) ]
+    FOLDERFILTER get dup
+    [ dup word?
+      [ execute( entry -- ? ) ]
+      [ call( entry -- ? ) ]
+      if
+    ]
     [ drop  (folder-filter) ]
     if
     ;
@@ -438,14 +447,14 @@ SYMBOL: FolderFilter
         ] dip
         [ [ folder-filter ] filter ] dip
         swap
-        [ over pathname "/" append swap to-folder ] map
+        [ over pathname "/" append swap entry>folder ] map
         >>entries entries>>
     ] if
     ;
 
 SYMBOL: †test-level
 
-FROM: string => to-folder-tree ;
+FROM: string => >folder-tree ;
 
 ! Recurse into folder and get every file stored into entries
 : (folder-entries-deep) ( folder -- entries )
@@ -454,7 +463,7 @@ FROM: string => to-folder-tree ;
       [ dup is-dot-dir? not 
           [ †level get †test-level get <=
             [ †level get 1 + †level set
-              [ pathname to-folder-tree (folder-entries-deep) ] keep 
+              [ pathname >folder-tree (folder-entries-deep) ] keep 
               swap >>entries
             ] when 
           ] when
