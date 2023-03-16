@@ -211,7 +211,11 @@ TUPLE: folder-entry < directory-entry path info xattrs entries fingerprint depth
      (folder-entry) folder-entry boa
      ;
     
-! Accessors
+ : <folder-entry-deep> ( name info path -- folder )
+     (folder-entry) folder-entry boa  t >>depth
+     ;
+
+    ! Accessors
 : nameRead ( entry -- name )   name>> ;
 : pathRead ( entry -- path )   path>> ;
 : pathnameRead ( entry -- path )
@@ -222,22 +226,16 @@ TUPLE: folder-entry < directory-entry path info xattrs entries fingerprint depth
 DEFER: does-exist?
 DEFER: pathnameGet
     
-: (xattrs@) ( entry -- xattrs )
-    dup does-exist? [
-        [ xattrs>> ] keep
-        swap empty?
-        [ pathnameGet
-          swap get-xattrs
-          [ >>xattrs ] keep
-          nip
-        ]
-        [ xattrs>> ]
-        if
-    ]
-    [ drop f ]
-    if
-    ;
-: xattrsRead ( entry -- xattrs )   (xattrs@) ;
+: (xattrs@) ( entry -- entry )
+    dup does-exist? [ ! entry ? 
+        dup xattrs>> empty? ! entry ?
+        [ dup ! entry entry 
+          pathnameRead path>xattrs ! entry xattrs
+          >>xattrs  ! entry
+        ] when
+    ] when ; ! entry 
+
+: xattrsRead ( entry -- xattrs )   (xattrs@) xattrs>> ;
 : entriesRead ( entry -- entries )   entries>> ;
 
 : nameWrite ( name entry -- )   name<< ;
@@ -257,6 +255,7 @@ DEFER: pathnameGet
     [ pathnameRead ] keep ;
 : infoGet ( entry -- file-info entry )
     [ info>> ] keep ;
+
 : xattrsGet ( entry -- xattrs entry )
     [ xattrsRead ] keep ;
 : entriesGet ( entry -- entries entry )
@@ -340,25 +339,29 @@ DEFER: pathnameGet
     [ is-directory? ] keep  is-dot?  and ;
 
 DEFER: folder-entries
+SYMBOL: FOLDERFILTER
     
 IN: string
 GENERIC: >folder ( path -- folder )
 GENERIC: >folder-tree ( path -- folder )
 
 FROM: folder => folder-entries ;
+
+: (>folder) ( path entry -- folder )
+    [ dup [ link-info ]
+      [ nip drop f ]
+      recover
+    ] dip
+    [ last-path-component ] 2dip 
+    call( name info path -- folder )
+    [ folder-entries ] keep  swap >>entries
+    f FOLDERFILTER set ;
     
 M: string >folder ( path -- folder )
-    dup [ link-info ]
-    [ nip drop f ]
-    recover
-    [ last-path-component ] dip
-    <folder-entry>
-    [ folder-entries ] keep  swap >>entries
-; 
+    [ <folder-entry> ]  (>folder) ;
 
 M: string >folder-tree ( path -- folder )
-    >folder deep
-    [ folder-entries ] keep  swap >>entries ;
+    [ <folder-entry-deep> ] (>folder) ;
     
 ! IN: folder
 ! : >folder ( path -- folder )
@@ -375,6 +378,7 @@ GENERIC: entry>folder-tree ( path directory-entry -- folder )
     tuple-slots
     swap normalize-path
     [ suffix ] keep
+    over first append  
     link-info suffix 
     folder-entry prefix
     >tuple
@@ -421,8 +425,6 @@ SYMBOL: ENTRY-COUNT
 : not-dot-file? ( entry -- ? )
     is-dot? not ;
     
-SYMBOL: FOLDERFILTER
-
 : folder-filter ( entry -- ? )
     FOLDERFILTER get dup
     [ dup word?

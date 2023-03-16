@@ -37,7 +37,7 @@ SYMBOLS: COLLECTION-FOLDER  collection ;
     [ entries>> length 1  = ] filter ;
 
 : (collect) ( path -- )
-    string:>folder-tree
+    >folder-tree
     "Collecting files" print
     folder-entries
     collection set
