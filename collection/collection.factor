@@ -7,9 +7,22 @@
 USING: accessors assocs checksums checksums.adler-32
 checksums.fnv1 checksums.md5 checksums.sha continuations
 file.xattr folder io io.backend io.files.info
-io.files.types io.pathnames io.streams.c kernel math math.order
+io.encodings.utf8 io.files io.files.types io.pathnames io.streams.c kernel math math.order
 random namespaces sequences serialize sorting strings string threads words
-math.parser ;
+math.parser math.unicode extensions ;
+
+IN: serialize
+: save-fstore ( obj path -- )
+    utf8 <file-writer> [ serialize ] with-output-stream ;
+
+: load-fstore ( path -- obj )
+    dup file-exists? [
+        utf8 <file-reader> [ deserialize ] with-input-stream
+    ] [
+        drop f  ! >r H{ } clone r>
+    ] if
+    ;
+
 IN: folder.collection
 
 SYMBOLS: COLLECTION-FOLDER  collection ;
@@ -153,7 +166,7 @@ IN: folder.fingerprint
 
 : spotcheck-entry ( entry -- entry )
     dup
-    pathname "r" fopen >>fingerprint
+    pathname>> "r" fopen >>fingerprint
     B{ }
     [ over fingerprint>> fgetc
       f over ≠ swap
