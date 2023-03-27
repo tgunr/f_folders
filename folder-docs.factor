@@ -15,7 +15,7 @@ HELP: tab?
 { $description "Compares character with tab" }
 ;
 
-HELP: components-to-path 
+HELP: path-components 
 { $values 
   { "seq" "sequence of path names" } 
   { "path" "completed path" } 
@@ -23,7 +23,7 @@ HELP: components-to-path
 { $description "Given a sequence of path components, will join them together into a complete path" }
 ;
 
-HELP: bump-name
+HELP: move-aside
 { $values
   { "path" string }
   { "path'" string }

@@ -106,12 +106,10 @@ USE: folder.collection
     [ fingerprintRead ] collect-by 
     ;
 
-FROM: folder => pathname ;
-
 : delete&relink ( entry1 entry2 -- )
     dup does-exist?
     [ dup delete-entry ] when
-    ".... " over pathname append print-path
+    ".... " over pathname>> append print-path
     hardlink-entries
     ;
 

@@ -91,10 +91,10 @@ IN: folder.fingerprint
 
 : spotcheck-entry ( entry -- entry )
     dup
-    pathname "r" fopen >>fingerprint
+    pathname>> "r" fopen >>fingerprint
     B{ }
     [ over fingerprint>> fgetc
-      f over ≠ swap
+      f over = not swap
       over [ rot swap suffix
              [ dup fingerprint>> 100000 1 rot fseek ] 2dip swap
            ]

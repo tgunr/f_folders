@@ -15,7 +15,8 @@ file.xattr io io.backend io.files io.files.info io.files.links
 io.streams.c kernel layouts libc locals make math math.order
 math.parser namespaces prettyprint prettyprint.config
 prettyprint.custom regexp sequences sorting splitting strings
-threads unix.ffi unix.users variables words ;
+math.unicode syntax.terse threads unix.ffi unix.users variables words
+    extensions ;
 
 IN: folder
 
@@ -28,56 +29,7 @@ IN: folder
 : print-path ( seq -- )
     trunc-path ... ;
 
-IN: strings
-: space? ( ch -- ? ) 32 = ;
-
-: tab? ( ch -- ? ) 9 = ;
-
-: trim-whitespace ( str -- str' )
-    [ [ space? ] [ tab? ] bi or ] trim-head
-    [ [ space? ] [ tab? ] bi or ] trim-tail
-    ;
-
-: quote-soft ( string -- string' )
-    "\"" dup surround ;
-
-: quote-hard ( string -- string' )
-    "'" dup surround ;
-
-IN: io.pathnames
-: soft-quote ( string -- string' )
-    "\"" dup surround ;
-
-: hard-quote ( string -- string' )
-    "'" dup surround ;
-
-: escape-string-by ( str table -- escaped )
-    ! Convert $ ( ) ' and " to shell escapes
-    [ '[ [ _ at ] [ % ] [ , ] ?if ] each ] "" make ; inline
-
-CONSTANT: PATH_ESCAPE_CHARS H{
-       { CHAR: \s "\\ "  }
-       { CHAR: \n "?"    }
-       { CHAR: (  "\\("  }
-       { CHAR: )  "\\)"  }
-       { CHAR: &  "\\&"  }
-       { CHAR: $  "\\$"  }
-       { CHAR: ;  "\\;"  }
-       { CHAR: "  "\""   }      ! for editor's sake "
-       { CHAR: '  "\\'"  } 
-       { CHAR: `  "\\`"  }
-       }
-       
-: escape-string ( str -- str' )
-    PATH_ESCAPE_CHARS escape-string-by ;
-    ! [ dup
-    !   [ PATH_ESCAPE_CHARS at ] [ nip ] [ drop 1string ] ?if
-    ! ] { } map-as
-    ! "" join ; 
-
-: components-to-path ( seq -- path )
-    "/" join
-    ;
+: components-to-path ( seq -- path )  "/" join ;
 
 : as-directory ( path -- path' )
     [ last CHAR: / = ] keep
@@ -133,8 +85,6 @@ M: string absolute-path
     ] if
     ;
 
-IN: io.directories
-
 : remove-extension ( path -- path )
     [ [ CHAR: . = ] find-last drop ] keep swap head ;
 
@@ -159,6 +109,7 @@ IN: io.directories
     system drop
     ;
 
+FROM: io.directories => move-file ;
 : move-aside ( path -- )
     dup bump-name
     [ over remove-acl move-file ]
@@ -189,6 +140,7 @@ IN: io.files.types
 
 SYMBOL: +nonexistent-file+
 
+USE: io.directories
 IN: folder
 
 CONSTANT: BUNDLEID "net.polymicro."
@@ -261,8 +213,8 @@ DEFER: pathnameGet
 : entriesGet ( entry -- entries entry )
     [ entries>> ] keep ;
 
-    : does-exist? ( entry -- ? )
-    type>> +nonexistent-file+ ≠ ;
+: does-exist? ( entry -- ? )
+    type>> +nonexistent-file+ = not ;
 
 : is-directory? ( entry -- ? )
     type>> +directory+ = ;
@@ -344,25 +296,31 @@ SYMBOL: FOLDERFILTER
 IN: string
 GENERIC: >folder ( path -- folder )
 GENERIC: >folder-tree ( path -- folder )
-
+GENERIC: >entry ( path -- entry )
 FROM: folder => folder-entries ;
 
-: (>folder) ( path entry -- folder )
-    [ dup [ link-info ]
-      [ nip drop f ]
-      recover
-    ] dip
-    [ last-path-component ] 2dip 
-    call( name info path -- folder )
+: (>entry) ( path class -- entry )
+    over 
+    [ link-info ]
+    [ nip drop f ]
+    recover
+    [ last-path-component ] 2dip swap
+    call( name info path -- folder ) ;
+    
+: (>folder) ( path class -- folder )
+    (>entry)
     [ folder-entries ] keep  swap >>entries
     f FOLDERFILTER set ;
     
 M: string >folder ( path -- folder )
-    [ <folder-entry> ]  (>folder) ;
+    [ <folder-entry> ] (>folder) ;
 
 M: string >folder-tree ( path -- folder )
     [ <folder-entry-deep> ] (>folder) ;
-    
+
+M: string >entry ( path -- entry )
+    [ <folder-entry> ] (>entry) ;
+
 ! IN: folder
 ! : >folder ( path -- folder )
 !     >folder ; ! Uses string >folder from above
@@ -378,8 +336,8 @@ GENERIC: entry>folder-tree ( path directory-entry -- folder )
     tuple-slots
     swap normalize-path
     [ suffix ] keep
-    over first append  
-    link-info suffix 
+    over first  append  
+    [ link-info ] [ 2drop f ] recover  suffix 
     folder-entry prefix
     >tuple
     ;
@@ -392,9 +350,8 @@ M: directory-entry entry>folder-tree
 
 
 IN: folder
-GENERIC: pathname ( folder-entry -- path )
-M: folder-entry pathname
-    pathnameRead ; 
+
+: pathname>> ( entry -- path )  pathnameRead ; 
 
 : error>string ( error -- string )
     "ERROR: "
@@ -405,7 +362,7 @@ M: folder-entry pathname
 ;
       
 FROM: io.pathnames => absolute-path ;
-M: folder-entry absolute-path pathname absolute-path ;
+M: folder-entry absolute-path pathname>> absolute-path ;
 
 FROM: io.directories => (directory-entries) entry>folder ;
 
@@ -414,10 +371,10 @@ INITIALIZED-SYMBOL: COUNTBY [ 1000 ]
 SYMBOL: ENTRY-COUNT
     
 : count-by ( n -- )   COUNTBY set  0 ENTRY-COUNT set ;
-: +count ( -- )   ENTRY-COUNT get  1+  ENTRY-COUNT set ;
+: +count ( -- )   ENTRY-COUNT get  1 +  ENTRY-COUNT set ;
 : .countby ( -- )
     ENTRY-COUNT get  COUNTBY get  mod 0=
-    [ ENTRY-COUNT get  HERE. +count ] when ;
+    [ ENTRY-COUNT get  . +count ] when ;
     
 : (folder-filter) ( entry -- ? )
     is-dot-dir? not ;
@@ -441,7 +398,7 @@ SYMBOL: ENTRY-COUNT
     [ drop { } ]
     [
         yield
-        [ pathname ] keep
+        [ pathname>> ] keep
         [ 
             [ (directory-entries) ]
             [ message>>  ": " prepend  append  print-path  { } ]
@@ -449,7 +406,7 @@ SYMBOL: ENTRY-COUNT
         ] dip
         [ [ folder-filter ] filter ] dip
         swap
-        [ over pathname "/" append swap entry>folder ] map
+        [ over pathname>> "/" append swap entry>folder ] map
         >>entries entries>>
     ] if
     ;
@@ -465,7 +422,7 @@ FROM: string => >folder-tree ;
       [ dup is-dot-dir? not 
           [ †level get †test-level get <=
             [ †level get 1 + †level set
-              [ pathname >folder-tree (folder-entries-deep) ] keep 
+              [ pathname>> >folder-tree (folder-entries-deep) ] keep 
               swap >>entries
             ] when 
           ] when
@@ -477,7 +434,7 @@ FROM: string => >folder-tree ;
     { } swap
     [
         dup is-directory? [
-            [ dup is-dot-dir? not ] retain
+            [ dup is-dot-dir? not ] keep swap
             [ entries>> (deep-entries)
               nip append
             ] 
@@ -510,15 +467,15 @@ FROM: string => >folder-tree ;
 ;
 
 : entry-files ( entry -- seq )
-    [ entries>> ] retain
-    [ name>>  over pathname as-directory  prepend ] map  nip
+    [ entries>> ] keep swap
+    [ name>>  over pathname>> as-directory  prepend ] map  nip
     ;
     
 : folder-filenames ( folder -- seq )
     folder-entries [ name>> ] map! ;
 
 : with-folder-directory ( folder quot -- )
-     [ pathname ] dip  with-directory ; inline
+     [ pathname>> ] dip  with-directory ; inline
 
 : with-folder ( folder quot -- )
      [ folder-entries ] dip each ; inline
@@ -530,10 +487,10 @@ FROM: string => >folder-tree ;
     dup type>>
     {
         { +regular-file+ [ path>> escape-string  "open " prepend  system ] }
-        { +directory+ [ pathname escape-string  "open " prepend  system ] }
+        { +directory+ [ pathname>> escape-string  "open " prepend  system ] }
         { +symbolic-link+ [ path>> escape-string  "open " prepend  system ] }
         { +nonexistent-file+ [ "Not a file" print-path ] }
-        [ drop  "Can't determine file type" HERE. ]
+        [ drop  "Can't determine file type" . ]
     } case
     drop
     ;
@@ -541,9 +498,8 @@ FROM: string => >folder-tree ;
 SYMBOL: ERRORS
  
 : copy-entry  ( from to -- )
-    [ [ pathname ] dip  pathname  copy-file-into ]
-    [ error>string
-      HERE.
+    [ [ pathname>> ] dip  pathname>>  copy-file-into ]
+    [ error>string .
       { } 2sequence 
       ERRORS get  swap suffix
       ERRORS set
@@ -553,16 +509,16 @@ SYMBOL: ERRORS
     
 : copy-entries ( from to -- )
     { } ERRORS set
-    2dup [ type>> +nonexistent-file+ ≠ ] bi@ or
-    [ over entries>> [ [ swap copy-entry ] retain  ] each 2drop ]
+    2dup [ type>> +nonexistent-file+ = not ] bi@ or
+    [ over entries>> [ [ swap copy-entry ] keep swap  ] each 2drop ]
     [ 2drop ]
     if
     ;
 
 : move-entry  ( from to -- )
-    [ [ pathname ] dip  pathname  move-file-into ]
+    [ [ pathname>> ] dip  pathname>>  move-file-into ]
     [ error>string
-      HERE.
+      .
       { } 2sequence 
       ERRORS get  swap suffix
       ERRORS set
@@ -572,35 +528,35 @@ SYMBOL: ERRORS
     
 : move-entries ( from to -- )
     { } ERRORS set
-    2dup [ type>> +nonexistent-file+ ≠ ] bi@ or
-    [ over entries>> [ [ swap move-entry ] retain  ] each 2drop ]
+    2dup [ type>> +nonexistent-file+ = not ] bi@ or
+    [ over entries>> [ [ swap move-entry ] keep swap  ] each 2drop ]
     [ 2drop ]
     if
     ;
 
 
 : rename-entry ( from to -- )
-    2drop "Unimplemented" HERE.
+    2drop "Unimplemented" .
     ;
 
 : delete-entry ( entry -- )
     [ dup
-      [ type>> ] retain
+      [ type>> ] keep swap
       {
-          { +regular-file+ [ pathname delete-file ] }
-          { +directory+ [ pathname delete-directory ] }
-          { +symbolic-link+ [ pathname delete-file ] }
+          { +regular-file+ [ pathname>> delete-file ] }
+          { +directory+ [ pathname>> delete-directory ] }
+          { +symbolic-link+ [ pathname>> delete-file ] }
           [ 2drop ]
       } case
       +nonexistent-file+ swap type<<
     ]
-    [ error>string HERE.  drop ]
+    [ error>string .  drop ]
     recover
 ;
 
 : delete-entry-tree ( entry -- )
-    pathname
-    [ file-exists? ] retain 
+    pathname>>
+    [ file-exists? ] keep swap 
     [ delete-tree ]
     [ drop ]
     if
@@ -611,18 +567,17 @@ SYMBOL: (link-entries)
 : symlink-entries ( entry1 entry2 -- )
     over file-exists?
     [ dup delete-entry
-      [ pathname ] bi@
+      [ pathname>> ] bi@
       [ symlink ] 2keep
-      pick 0≠
+      pick 0 = not
       [ [ " to " append ] dip
-        append
-        "ERROR: " prepend  HERE.
+        append "ERR: " prepend print
         drop
       ]
       [ drop 2drop ]
       if
     ]
-    [ drop  pathname " does not exist: " append  HERE. ]
+    [ drop  pathname>> " does not exist: " append  print ]
     if
     ;
 
@@ -630,7 +585,7 @@ SYMBOL: (link-entries)
     over type>> +symbolic-link+ = not [ 
         dup file-exists?
         [ dup delete-entry 
-          [ pathname ] bi@
+          [ pathname>> ] bi@
           [ make-hard-link ]
           [    "Error: " over errno>> number>string append
                " " append over args>> first append " " append
@@ -638,9 +593,9 @@ SYMBOL: (link-entries)
                2drop ]
           recover
         ]
-        [ nip  "dst does not exist: " swap pathname append  print-path ]
+        [ nip  "dst does not exist: " swap pathname>> append  print-path ]
         if
-    ] [ drop  "src is symlink!: " swap pathname append  print-path ] if
+    ] [ drop  "src is symlink!: " swap pathname>> append  print-path ] if
     ;
 
 M: folder-entry pprint* pprint-object ;
